@@ -182,7 +182,7 @@ SpiLcdDisplay::SpiLcdDisplay(esp_lcd_panel_io_handle_t panel_io,
           {
               .buff_dma = 1,
               .buff_spiram = 0,
-              .sw_rotate = 1,
+              .sw_rotate = 0,
               .swap_bytes = 1,
               .full_refresh = 0,
               .direct_mode = 0,

@@ -59,7 +59,6 @@ OttoEmojiDisplay::OttoEmojiDisplay(esp_lcd_panel_io_handle_t panel_io,
                     mirror_x, mirror_y, swap_xy),
       emotion_gif_(nullptr) {
   SetupGifContainer();
-  lv_display_set_rotation(display_, LV_DISPLAY_ROTATION_180);
 };
 
 static void TearAnimExec(void *obj, int32_t v) {

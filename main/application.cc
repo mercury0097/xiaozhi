@@ -605,6 +605,9 @@ void Application::Start() {
                               xiaozhi::LOGIC_CONVERSATION_END, nullptr);
             ESP_LOGI(TAG, "📡 Event published: CONVERSATION_END");
 
+            // Ensure microphone is unmuted for the next turn
+            audio_service_.SetInputMute(false);
+
             if (listening_mode_ == kListeningModeManualStop) {
               SetDeviceState(kDeviceStateIdle);
             } else {
@@ -897,13 +900,15 @@ void Application::SetDeviceState(DeviceState state) {
     display->SetStatus(Lang::Strings::LISTENING);
     display->SetEmotion("neutral");
 
-    // Make sure the audio processor is running
+    // Send start listening if audio processor isn't running
     if (!audio_service_.IsAudioProcessorRunning()) {
-      // Send the start listening command
       protocol_->SendStartListening(listening_mode_);
-      audio_service_.EnableVoiceProcessing(true);
-      audio_service_.EnableWakeWordDetection(false);
     }
+
+    // Always enable voice processing when entering Listening state
+    // This is critical for VAD to work after state transitions
+    audio_service_.EnableVoiceProcessing(true);
+    audio_service_.EnableWakeWordDetection(false);
     break;
   case kDeviceStateSpeaking:
     display->SetStatus(Lang::Strings::SPEAKING);
@@ -1194,32 +1199,38 @@ void Application::SendTouchStartSequence() {
     return;
   }
 
-  ESP_LOGI(TAG, "Touch: sending Wake Word Injection strategy");
-  ESP_LOGI(TAG, "Touch: session_id=%s", protocol_->session_id().c_str());
+  ESP_LOGI(TAG, "Touch: starting sequence");
 
-  // 1. Mute audio input to send silence (avoid noise)
-  audio_service_.SetInputMute(true);
+  // 1. If speaking, abort it
+  if (device_state_ == kDeviceStateSpeaking) {
+    AbortSpeaking(kAbortReasonNone);
+  }
 
-  // 2. Send "Wake Word Detected" with our text
-  // This tells the server: "I heard this phrase, now I'm listening"
+  // 2. Ensure audio channel is open (for subsequent audio streaming)
+  if (!protocol_->IsAudioChannelOpened()) {
+    SetDeviceState(kDeviceStateConnecting);
+    if (!protocol_->OpenAudioChannel()) {
+      ESP_LOGE(TAG, "Failed to open audio channel");
+      return;
+    }
+  }
+
+  // 3. Send Wake Word Detected (Text)
+  // This triggers the server to respond
   ESP_LOGI(TAG, "Touch: sending wake word: %s", kTouchMessage);
   protocol_->SendWakeWordDetected(kTouchMessage);
 
-  // 3. Start listening (Realtime mode is standard for wake word follow-up)
-  listening_mode_ = kListeningModeRealtime;
+  // 4. Set listening mode based on AEC capability
+  // If AEC is off, we must use AutoStop to avoid recording the speaker output
+  // (echo)
+  if (aec_mode_ == kAecOff) {
+    listening_mode_ = kListeningModeAutoStop;
+  } else {
+    listening_mode_ = kListeningModeRealtime;
+  }
   SetDeviceState(kDeviceStateListening);
 
-  // 4. Wait a bit to let server process the "wake word" and start session
-  vTaskDelay(pdMS_TO_TICKS(500));
-
-  // 5. Stop listening (we sent silence, so server has context + silence)
-  // We don't need to send text here because we sent it as wake word
-  protocol_->SendStopListening();
-
-  // 6. Unmute audio input
-  audio_service_.SetInputMute(false);
-
-  // 7. Send MCP notification as backup
+  // 5. Send MCP notification as backup/context
   SendTouchEventViaMcp();
 
   touch_message_pending_ = false;
@@ -1227,7 +1238,6 @@ void Application::SendTouchStartSequence() {
   touch_start_request_time_us_ = 0;
 
   if (touch_channel_opened_for_touch_) {
-    ESP_LOGI(TAG, "Touch: keeping audio channel open for AI response");
     touch_channel_opened_for_touch_ = false;
   }
 }

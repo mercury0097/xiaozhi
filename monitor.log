@@ -1,0 +1,18 @@
+Executing action: monitor
+Serial port /dev/cu.usbmodem101
+/dev/cu.usbmodem101 failed to connect: Could not open /dev/cu.usbmodem101, the port is busy or doesn't exist.
+([Errno 35] Could not exclusively lock port /dev/cu.usbmodem101: [Errno 35] Resource temporarily unavailable)
+
+Serial port /dev/cu.debug-console
+Connecting.......................
+/dev/cu.debug-console failed to connect: Failed to connect to Espressif device: No serial data received.
+For troubleshooting steps visit: https://docs.espressif.com/projects/esptool/en/latest/troubleshooting.html
+Serial port /dev/cu.HUAWEIFreeBudsPro
+Connecting.......................
+/dev/cu.HUAWEIFreeBudsPro failed to connect: Failed to connect to Espressif device: No serial data received.
+For troubleshooting steps visit: https://docs.espressif.com/projects/esptool/en/latest/troubleshooting.html
+Serial port /dev/cu.EDIFIERX5Pro
+Connecting.......................No serial ports found. Connect a device, or use '-p PORT' option to set a specific port.
+
+/dev/cu.EDIFIERX5Pro failed to connect: Failed to connect to Espressif device: No serial data received.
+For troubleshooting steps visit: https://docs.espressif.com/projects/esptool/en/latest/troubleshooting.html

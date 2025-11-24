@@ -1,0 +1,16 @@
+--- a/managed_components/espressif__esp-sr/src/model_path.c
++++ b/managed_components/espressif__esp-sr/src/model_path.c
+@@ -309,6 +309,13 @@
+ 
+ srmodel_list_t *srmodel_mmap_init(const esp_partition_t *partition)
+ {
++    // 🎯 强制清除旧缓存，确保每次都从 Flash 重新加载最新模型
++    // 修复：设备重启后 vadnet1_medium 无法加载的问题
++    if (static_srmodels != NULL) {
++        printf("[PATCH] Clear old static_srmodels cache before loading from Flash\n");
++        static_srmodels = NULL;
++    }
++    
+     if (static_srmodels == NULL) {
+         static_srmodels = srmodel_list_alloc();
+     } else {

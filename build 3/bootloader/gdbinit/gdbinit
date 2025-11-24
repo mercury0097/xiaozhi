@@ -1,0 +1,2 @@
+source /Users/machenyang/Desktop/xiaozhi-esp32-main/build/bootloader/gdbinit/symbols
+source /Users/machenyang/Desktop/xiaozhi-esp32-main/build/bootloader/gdbinit/connect

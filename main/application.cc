@@ -9,7 +9,7 @@
 #include "websocket_protocol.h"
 
 namespace {
-constexpr const char *kTouchMessage = "我被摸头了，好开心";
+constexpr const char *kTouchMessage = "（用户轻轻摸了摸你的头）";
 constexpr int64_t kTouchStartAckTimeoutUs = 700'000; // 700ms
 } // namespace
 

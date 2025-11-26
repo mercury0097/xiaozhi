@@ -34,7 +34,7 @@ void AudioService::Initialize(AudioCodec *codec) {
       codec->output_sample_rate(), 1, OPUS_FRAME_DURATION_MS);
   opus_encoder_ =
       std::make_unique<OpusEncoderWrapper>(16000, 1, OPUS_FRAME_DURATION_MS);
-  opus_encoder_->SetComplexity(0);
+  opus_encoder_->SetComplexity(5); // 提升音质:0=最快但音质低,5=平衡,10=最高音质
 
   if (codec->input_sample_rate() != 16000) {
     input_resampler_.Configure(codec->input_sample_rate(), 16000);
@@ -370,6 +370,21 @@ void AudioService::OpusCodecTask() {
           output_resampler_.Process(task->pcm.data(), task->pcm.size(),
                                     resampled.data());
           task->pcm = std::move(resampled);
+        }
+
+        // 🔊 音频增益处理:提升音量(1.5倍增益,可调整)
+        constexpr float kAudioGain =
+            1.5f; // 增益系数:1.0=原始,1.5=提升50%,2.0=翻倍
+        for (auto &sample : task->pcm) {
+          int32_t amplified = static_cast<int32_t>(sample * kAudioGain);
+          // 削波保护:防止溢出导致失真
+          if (amplified > 32767) {
+            sample = 32767;
+          } else if (amplified < -32768) {
+            sample = -32768;
+          } else {
+            sample = static_cast<int16_t>(amplified);
+          }
         }
 
         lock.lock();

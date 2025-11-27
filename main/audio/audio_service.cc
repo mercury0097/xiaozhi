@@ -34,7 +34,8 @@ void AudioService::Initialize(AudioCodec *codec) {
       codec->output_sample_rate(), 1, OPUS_FRAME_DURATION_MS);
   opus_encoder_ =
       std::make_unique<OpusEncoderWrapper>(16000, 1, OPUS_FRAME_DURATION_MS);
-  opus_encoder_->SetComplexity(5); // 提升音质:0=最快但音质低,5=平衡,10=最高音质
+  opus_encoder_->SetComplexity(
+      2); // 降低到2: 平衡音质与性能，防止CPU过载导致重启
 
   if (codec->input_sample_rate() != 16000) {
     input_resampler_.Configure(codec->input_sample_rate(), 16000);
@@ -127,8 +128,9 @@ void AudioService::Start() {
         audio_service->OpusCodecTask();
         vTaskDelete(NULL);
       },
-      "opus_codec", 2048 * 13, this, 5,
-      &opus_codec_task_handle_); // 优先级提高到5，确保及时解码
+      "opus_codec", 2048 * 16, this,
+      5,                         // 增加栈大小到32KB,防止音频增益处理导致栈溢出
+      &opus_codec_task_handle_); // 优先级提高到5,确保及时解码
 }
 
 void AudioService::Stop() {

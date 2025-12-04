@@ -71,13 +71,19 @@ bool AfeWakeWord::Initialize(AudioCodec* codec, srmodel_list_t* models_list) {
     for (int i = 0; i < ref_num; i++) {
         input_format.push_back('R');
     }
-    // 使用低功耗模式，避免 CPU 过载
+    // v12优化：使用普通模式以获得更好的 AEC 效果，提高打断灵敏度
+    // 在机器人说话时，需要更强的回声消除才能准确检测唤醒词
+    ESP_LOGI(TAG, "AFE input_format: %s (channels=%d, ref=%d)", 
+             input_format.c_str(), codec_->input_channels(), ref_num);
+    
     afe_config_t* afe_config = afe_config_init(input_format.c_str(), models_, AFE_TYPE_SR, AFE_MODE_LOW_COST);
     afe_config->aec_init = codec_->input_reference();
+    // 🛡️ 使用 SR_LOW_COST 模式的 AEC，VOIP 模式太耗 CPU 会触发看门狗
     afe_config->aec_mode = AEC_MODE_SR_LOW_COST;
     afe_config->afe_perferred_core = 1;
-    afe_config->afe_perferred_priority = 1;
+    afe_config->afe_perferred_priority = 3;  // 提高优先级，避免 ringbuffer 溢出
     afe_config->memory_alloc_mode = AFE_MEMORY_ALLOC_MORE_PSRAM;
+    afe_config->afe_ringbuf_size = 50;  // 增加 ringbuffer 大小
     
     // 唤醒词检测阶段不启用降噪，避免 CPU 过载
     // 降噪会在语音识别阶段启用（说话时才启动）
@@ -85,6 +91,12 @@ bool AfeWakeWord::Initialize(AudioCodec* codec, srmodel_list_t* models_list) {
     
     afe_iface_ = esp_afe_handle_from_config(afe_config);
     afe_data_ = afe_iface_->create_from_config(afe_config);
+
+    // 降低唤醒词检测阈值，提高打断灵敏度
+    // 阈值范围 0.4 ~ 0.9999，越低越灵敏（但误触发也会增加）
+    // 默认阈值约 0.5，设置为 0.48 平衡灵敏度和误触发
+    afe_iface_->set_wakenet_threshold(afe_data_, 1, 0.48f);
+    ESP_LOGI(TAG, "唤醒词检测阈值已设置为 0.48（默认约0.5）");
 
     xTaskCreate([](void* arg) {
         auto this_ = (AfeWakeWord*)arg;
@@ -114,6 +126,10 @@ void AfeWakeWord::Feed(const std::vector<int16_t>& data) {
     if (afe_data_ == nullptr) {
         return;
     }
+    // 检查是否正在运行，避免 Stop 后继续 feed 导致 ringbuffer 溢出
+    if ((xEventGroupGetBits(event_group_) & DETECTION_RUNNING_EVENT) == 0) {
+        return;
+    }
     afe_iface_->feed(afe_data_, data.data());
 }
 
@@ -135,7 +151,7 @@ void AfeWakeWord::AudioDetectionTask() {
 
         auto res = afe_iface_->fetch_with_delay(afe_data_, portMAX_DELAY);
         if (res == nullptr || res->ret_value == ESP_FAIL) {
-            continue;;
+            continue;
         }
 
         // Store the wake word data for voice recognition, like who is speaking

@@ -38,6 +38,10 @@ static const char *const STATE_STRINGS[] = {
     "connecting", "listening",     "speaking",    "upgrading",
     "activating", "audio_testing", "fatal_error", "invalid_state"};
 
+// 声明外部 Otto 动作函数
+extern void OttoSwing(int steps, int speed, int amount);
+extern void OttoJump(int steps, int speed);
+
 Application::Application() {
   event_group_ = xEventGroupCreate();
 
@@ -1107,6 +1111,15 @@ void Application::OnTouchDetected() {
 
     auto start_touch_sequence = [this]() {
       ESP_LOGI(TAG, "Touch: starting touch interaction sequence");
+      // 随机选择摇摆或跳跃动作
+      int random_action = esp_random() % 2;
+      if (random_action == 0) {
+        ESP_LOGI(TAG, "Touch: triggering Swing action");
+        OttoSwing(2, 1000, 30);
+      } else {
+        ESP_LOGI(TAG, "Touch: triggering Jump action");
+        OttoJump(2, 600);
+      }
       SendTouchStartSequence();
     };
 

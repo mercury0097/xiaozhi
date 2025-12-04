@@ -114,7 +114,8 @@ void AfeAudioProcessor::Initialize(AudioCodec* codec, int frame_duration_ms, srm
     // 使用低功耗模式，避免 CPU 过载
     // 🎯 传入 models 以确保使用我们指定的 nsnet2 和 vadnet1_medium
     afe_config_t* afe_config = afe_config_init(input_format.c_str(), models, AFE_TYPE_VC, AFE_MODE_LOW_COST);
-    afe_config->aec_mode = AEC_MODE_VOIP_LOW_COST;
+    // 🛡️ 使用 SR_LOW_COST 模式的 AEC，VOIP 模式太耗 CPU 会触发看门狗
+    afe_config->aec_mode = AEC_MODE_SR_LOW_COST;
     
     // 🎯 优化 VAD 参数以更好地检测人声
     afe_config->vad_mode = VAD_MODE_3;  // 最灵敏模式（0=不灵敏, 3=灵敏）
@@ -210,6 +211,10 @@ size_t AfeAudioProcessor::GetFeedSize() {
 
 void AfeAudioProcessor::Feed(std::vector<int16_t>&& data) {
     if (afe_data_ == nullptr) {
+        return;
+    }
+    // 检查是否正在运行，避免 Stop 后继续 feed 导致 ringbuffer 溢出
+    if ((xEventGroupGetBits(event_group_) & PROCESSOR_RUNNING) == 0) {
         return;
     }
     afe_iface_->feed(afe_data_, data.data());

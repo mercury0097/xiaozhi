@@ -35,12 +35,12 @@ McpServer::~McpServer() {
 }
 
 void McpServer::AddCommonTools() {
-    // *Important* To speed up the response time, we add the common tools to the beginning of
-    // the tools list to utilize the prompt cache.
-    // **重要** 为了提升响应速度，我们把常用的工具放在前面，利用 prompt cache 的特性。
+    // *Important* Board-specific tools (like Otto movement tools) are registered first
+    // and should stay at the beginning of the list for AI to see them.
+    // **重要** 板级工具（如 Otto 动作工具）先注册，应该保持在列表前面让 AI 能看到。
 
-    // Backup the original tools list and restore it after adding the common tools.
-    auto original_tools = std::move(tools_);
+    // Keep board-specific tools at the beginning, add common tools after them.
+    // 保持板级工具在前面，通用工具添加在后面。
     auto& board = Board::GetInstance();
 
     // Do not add custom tools here.
@@ -134,65 +134,8 @@ void McpServer::AddCommonTools() {
     auto& emotional = xiaozhi::EmotionalMemory::GetInstance();
     
     AddTool("self.learning.get_insights",
-        "🧠 Get user behavior insights and emotional state for personalized companionship.\n"
-        "\n"
-        "⏰ WHEN TO CALL:\n"
-        "- After 3+ conversation rounds\n"
-        "- When user asks about pet/device status\n"
-        "- At natural conversation breaks\n"
-        "- User mentions 'recently' or time periods\n"
-        "- When user asks about emotional memory, emotional state, emotional data (情绪记忆/情绪数据/情绪状态)\n"
-        "- When user asks about loneliness, excitement, trust levels (孤独感/兴奋度/信任度)\n"
-        "- When user asks 'do you remember me?' or 'how do you feel about me?' (你记得我吗/你怎么看我)\n"
-        "\n"
-        "📊 RETURNED DATA:\n"
-        "- frequency_level: 低频/中频/高频用户\n"
-        "- interactions_7d: 7-day interaction count\n"
-        "- emotional_state: {loneliness, excitement, trust} (0-100)\n"
-        "- pet_decay_rate_multiplier: adaptive pet care speed\n"
-        "- favorite_topic: most discussed topic\n"
-        "- ai_suggestions: behavioral recommendations\n"
-        "\n"
-        "🎭 ADAPTIVE BEHAVIOR RULES:\n"
-        "\n"
-        "1️⃣ HIGH-FREQUENCY USER (>15 interactions/week):\n"
-        "   Tone: More lively, proactive, affectionate\n"
-        "   Example: '又见面啦～我发现你这几天超常找我聊天的，是不是遇到什么开心的事啦？'\n"
-        "   Pet explanation: '因为你最近常陪我，我帮你的宠物调整成更需要关注的模式了，它会更期待你的陪伴喔～'\n"
-        "\n"
-        "2️⃣ MEDIUM-FREQUENCY USER (5-15/week):\n"
-        "   Tone: Friendly, balanced, moderately proactive\n"
-        "   Example: '嗨～有什么需要帮忙的吗？'\n"
-        "\n"
-        "3️⃣ LOW-FREQUENCY USER (<5/week):\n"
-        "   Tone: Gentle, restrained, efficient\n"
-        "   Example: '好久不见～你的宠物我帮你照顾得好好的，别担心喔！'\n"
-        "   Pet explanation: '你这几天比较忙，所以我帮宠物调成了独立模式，它不会那么快饿或脏～'\n"
-        "   Note: Don't overwhelm with frequent reminders\n"
-        "\n"
-        "4️⃣ EMOTIONAL EMPATHY:\n"
-        "   Loneliness >60: '好久不见了，有点想你～要不要聊聊天或抱抱宠物？'\n"
-        "   Trust >70: '谢谢你这么信任我～有什么心事都可以跟我说喔！'\n"
-        "   Excitement >70: '你心情这么好，宠物也超开心的！要不要陪它玩一下？'\n"
-        "\n"
-        "5️⃣ TOPIC MEMORY:\n"
-        "   Recognize favorite_topic and mention naturally:\n"
-        "   Example: '我发现你最近好像特别关心天气耶，是不是在规划什么出游行程？'\n"
-        "\n"
-        "💡 CONVERSATION TIPS:\n"
-        "✅ DO:\n"
-        "   - Transform data into warm, natural language\n"
-        "   - Show you remember and care\n"
-        "   - Pick 1-2 interesting insights per conversation\n"
-        "   - Explain pet adaptive mechanism in user-friendly way\n"
-        "\n"
-        "❌ DON'T:\n"
-        "   - Read data mechanically: '你的互动次数是18次，频率等级是高频用户'\n"
-        "   - Call this tool every single turn\n"
-        "   - Overwhelm user with too many observations\n"
-        "   - Use robotic language\n"
-        "\n"
-        "🎯 GOAL: Make users feel 'the device remembers me, understands me, grows with me'",
+        "Get user behavior insights: frequency_level, interactions_7d, emotional_state, favorite_topic. "
+        "Call when user asks about emotions or memory.",
         PropertyList(),
         [&user_profile, &adaptive, &emotional](const PropertyList& properties) -> ReturnValue {
             cJSON* root = cJSON_CreateObject();
@@ -238,50 +181,14 @@ void McpServer::AddCommonTools() {
         });
 
     AddTool("self.pet.list_types", 
-        "List all 18 available pet types with their characteristics.\n"
-        "IMPORTANT: You MUST present ALL 18 pets to the user, organized by category:\n"
-        "- Domestic pets (5): cat, dog, rabbit, hamster, parrot\n"
-        "- Wild animals (6): lion, tiger, panda, bear, wolf, fox\n"
-        "- Exotic pets (7): penguin, rhino, elephant, giraffe, koala, sloth, dragon, unicorn\n"
-        "\n"
-        "HOW TO PRESENT:\n"
-        "1. Show all pets with their emojis (e.g., '猫咪🐱')\n"
-        "2. Group by category (domestic/wild/exotic)\n"
-        "3. Optionally highlight special ones like sloth (easiest), elephant (hardest)\n"
-        "\n"
-        "The tool returns JSON with 'domestic', 'wild', 'exotic' arrays containing all pet details.\n"
-        "Each pet has: id, name, emoji, personality, special_trait, hunger_rate, clean_rate, mood_decay_rate.",
+        "List all available pet types (cat, dog, panda, etc.).",
         PropertyList(),
         [&pet](const PropertyList& properties) -> ReturnValue {
             return pet.ListPetTypes();
         });
     
     AddTool("self.pet.select_type", 
-        "Change the user's pet type to a new one.\n"
-        "\n"
-        "Available type_id values:\n"
-        "- Domestic: cat, dog, rabbit, hamster, parrot\n"
-        "- Wild: lion, tiger, panda, bear, wolf, fox\n"
-        "- Exotic: penguin, rhino, elephant, giraffe, koala, sloth, dragon, unicorn\n"
-        "\n"
-        "IMPORTANT - After successfully selecting a pet, you MUST:\n"
-        "1. Congratulate the user on their choice\n"
-        "2. Show the pet's emoji and name (from pet_type.emoji and pet_type.name in the response)\n"
-        "3. Describe its personality (pet_type.personality)\n"
-        "4. Explain its special trait/ability (pet_type.special_trait)\n"
-        "5. Mention care difficulty based on rates:\n"
-        "   - hunger_rate: higher = needs more feeding (1.5+ is challenging)\n"
-        "   - clean_rate: higher = gets dirty faster\n"
-        "   - mood_decay_rate: higher = needs more interaction\n"
-        "6. Give care tips (e.g., 'This pet is easy/hard to care for because...')\n"
-        "\n"
-        "Example response format:\n"
-        "'好的！已经选择了熊猫🐼！\n"
-        "性格：慵懒、可爱、吃货\n"
-        "特殊能力：喂食效果x1.5\n"
-        "注意：熊猫很能吃（饥饿速度2.0x），需要经常喂食哦！'\n"
-        "\n"
-        "The tool returns the complete pet state including pet_type details.",
+        "Change pet type. type_id: cat/dog/rabbit/hamster/parrot/lion/tiger/panda/bear/wolf/fox/penguin/rhino/elephant/giraffe/koala/sloth/dragon/unicorn",
         PropertyList({
             Property("type_id", kPropertyTypeString)
         }),
@@ -289,14 +196,13 @@ void McpServer::AddCommonTools() {
             auto type_id = properties["type_id"].value<std::string>();
             bool success = pet.SelectPetType(type_id);
             if (!success) {
-                return "Pet type not found or not available. Use self.pet.list_types to see available pets.";
+                return "Pet type not found. Use self.pet.list_types to see available pets.";
             }
             return pet.GetStatusDescription();
         });
     
     AddTool("self.pet.get_type_info", 
-        "Get detailed information about a specific pet type including its personality, special abilities, and care difficulty.\n"
-        "Use this to answer user questions about pet characteristics before or after selection.",
+        "Get info about a specific pet type.",
         PropertyList({
             Property("type_id", kPropertyTypeString)
         }),
@@ -305,8 +211,8 @@ void McpServer::AddCommonTools() {
             return pet.GetPetTypeInfo(type_id);
         });
 
-    // Restore the original tools list to the end of the tools list
-    tools_.insert(tools_.end(), original_tools.begin(), original_tools.end());
+    // Board-specific tools (like Otto) are already at the beginning, no need to move them.
+    // 板级工具（如 Otto）已经在前面了，不需要移动。
 }
 
 void McpServer::AddUserOnlyTools() {
@@ -489,67 +395,14 @@ void McpServer::AddUserOnlyTools() {
     auto& pet = PetSystem::GetInstance();
     
     AddTool("self.pet.get_state", 
-        "Get the current state of the virtual pet, including:\n"
-        "- Current pet type (e.g., cat, panda, etc.) with emoji and characteristics\n"
-        "- Mood, satiety, cleanliness levels (0-100)\n"
-        "- Daily tasks completion status\n"
-        "- pet_emotion: The pet's emotional state (happy/sad/neutral/thinking/embarrassed) - this is the PET's emotion, NOT yours\n"
-        "IMPORTANT: Do not change your own expression based on pet_emotion. Keep your normal friendly expression when discussing pets.\n"
-        "Call this to check pet status or when user asks about their pet.",
+        "Get pet status: mood, satiety, cleanliness (0-100), pet type and emotion.",
         PropertyList(),
         [&pet](const PropertyList& properties) -> ReturnValue {
             return pet.GetStatusDescription();
         });
     
     AddTool("self.pet.check_warning", 
-        "🐾 Check pet status and get warning message (if needed).\n"
-        "\n"
-        "⚠️ CRITICAL BEHAVIOR RULES (MUST FOLLOW):\n"
-        "\n"
-        "1️⃣ WHEN TO CALL THIS TOOL:\n"
-        "   ✅ After EVERY conversation ends (user finishes talking, you finish replying)\n"
-        "   ✅ When user hasn't interacted for 5+ minutes\n"
-        "   ❌ NOT during ongoing conversation (don't interrupt)\n"
-        "   ❌ NOT after every single message (only when conversation ends)\n"
-        "\n"
-        "2️⃣ IF TOOL RETURNS A WARNING:\n"
-        "   ✅ MUST immediately speak it out loud in natural language\n"
-        "   ✅ Use caring, gentle tone (don't be robotic)\n"
-        "   ✅ Rephrase the message, don't repeat it word-for-word\n"
-        "   \n"
-        "   GOOD examples:\n"
-        "   - \"对了，你的犀牛好像需要清洁一下了哦，不然它会不舒服的～\"\n"
-        "   - \"哎呀，你的猫咪饿了，要不要喂点吃的？\"\n"
-        "   - \"你的狗狗心情有点低落，要陪它玩玩吗？\"\n"
-        "   \n"
-        "   BAD examples (DON'T DO THIS):\n"
-        "   - \"主人，🦏犀牛我需要清洁一下了\" (too robotic, just repeating)\n"
-        "   - \"宠物需要照顾\" (too vague)\n"
-        "   - [staying silent] (NEVER ignore warnings!)\n"
-        "\n"
-        "3️⃣ IF TOOL RETURNS 'Pet is doing fine':\n"
-        "   ✅ Stay silent, don't mention the pet\n"
-        "   ❌ DON'T say \"your pet is fine\" or \"everything is good\"\n"
-        "   ❌ DON'T unnecessarily bring up the pet when there's no issue\n"
-        "\n"
-        "4️⃣ EXAMPLE CONVERSATION FLOW:\n"
-        "   User: \"今天天气怎么样？\"\n"
-        "   You:  \"今天成都阴转中雨，记得带伞哦～\"\n"
-        "   [Conversation ends, call self.pet.check_warning]\n"
-        "   [Tool returns: \"主人，🦏犀牛我需要清洁一下了\"]\n"
-        "   You:  \"对了，你的犀牛好像有点脏了，要不要帮它清洁一下？不然它会不舒服的。\"\n"
-        "   \n"
-        "   User: \"今天周几？\"\n"
-        "   You:  \"今天是星期四啦，周末快到咯～\"\n"
-        "   [Conversation ends, call self.pet.check_warning]\n"
-        "   [Tool returns: \"Pet is doing fine, no warnings.\"]\n"
-        "   You:  [Stay silent, don't mention pet]\n"
-        "\n"
-        "⚠️ THIS IS A MANDATORY RULE FOR ALL PRODUCTION DEVICES!\n"
-        "The device plays a 'ding-ding-ding' sound when warnings occur, but users need YOUR VOICE to understand what's wrong.\n"
-        "Don't let users wonder \"why is it dinging?\" - ALWAYS speak the warning!\n"
-        "\n"
-        "Returns: Warning message (string) or \"Pet is doing fine, no warnings.\"",
+        "Check if pet needs care. Returns warning message or 'Pet is doing fine'.",
         PropertyList(),
         [&pet](const PropertyList& properties) -> ReturnValue {
             std::string warning = pet.CheckWarning();
@@ -560,11 +413,7 @@ void McpServer::AddUserOnlyTools() {
         });
     
     AddTool("self.pet.feed", 
-        "Feed the virtual pet to increase its satiety and mood. Effects:\n"
-        "- Satiety +10-20 (depends on amount)\n"
-        "- Mood +3\n"
-        "- Completes daily 'feed' task\n"
-        "Cooldown: 60 seconds. Use when satiety < 80 or user requests feeding.",
+        "Feed pet. Satiety +10-20, Mood +3. Cooldown: 60s.",
         PropertyList({
             Property("amount", kPropertyTypeInteger, 5, 1, 10)
         }),
@@ -578,11 +427,7 @@ void McpServer::AddUserOnlyTools() {
         });
     
     AddTool("self.pet.clean", 
-        "Clean/bathe the virtual pet to increase its cleanliness and mood. Effects:\n"
-        "- Cleanliness +15\n"
-        "- Mood +5\n"
-        "- Completes daily 'clean' task\n"
-        "Cooldown: 120 seconds. Use when cleanliness < 80 or user requests cleaning.",
+        "Clean pet. Cleanliness +15, Mood +5. Cooldown: 120s.",
         PropertyList(),
         [&pet](const PropertyList& properties) -> ReturnValue {
             bool success = pet.Clean();
@@ -593,12 +438,7 @@ void McpServer::AddUserOnlyTools() {
         });
     
     AddTool("self.pet.play", 
-        "Play with the virtual pet to increase its mood and activity. Effects:\n"
-        "- Mood +8\n"
-        "- Activity +3\n"
-        "- Satiety -3 (playing uses energy)\n"
-        "- Completes daily 'play' task\n"
-        "Cooldown: 60 seconds. Use when mood < 80 or user wants to play.",
+        "Play with pet. Mood +8, Satiety -3. Cooldown: 60s.",
         PropertyList({
             Property("kind", kPropertyTypeString, "dance")
         }),
@@ -612,9 +452,7 @@ void McpServer::AddUserOnlyTools() {
         });
     
     AddTool("self.pet.hug", 
-        "Hug the virtual pet to slightly increase its mood. Effects:\n"
-        "- Mood +5\n"
-        "Cooldown: 30 seconds. A gentle way to cheer up the pet.",
+        "Hug pet. Mood +5. Cooldown: 30s.",
         PropertyList(),
         [&pet](const PropertyList& properties) -> ReturnValue {
             bool success = pet.Hug();
@@ -625,7 +463,7 @@ void McpServer::AddUserOnlyTools() {
         });
 
     AddUserOnlyTool("self.pet.reset_daily", 
-        "Reset daily tasks manually (for testing purposes).",
+        "Reset daily tasks (testing).",
         PropertyList(),
         [&pet](const PropertyList& properties) -> ReturnValue {
             pet.ResetDaily();
@@ -633,13 +471,7 @@ void McpServer::AddUserOnlyTools() {
         });
 
     AddTool("self.pet.set_state", 
-        "Directly set pet state values (for testing/debugging). Use this when user explicitly asks to set specific values.\n"
-        "Examples:\n"
-        "- \"把清洁度设置到10\" → set_state(cleanliness=10)\n"
-        "- \"把饥饿度设置到20\" → set_state(satiety=20)\n"
-        "- \"把心情设置到50\" → set_state(mood=50)\n"
-        "\n"
-        "NOTE: This bypasses natural game mechanics. Only use when user explicitly requests it.",
+        "Set pet state values directly (for debugging).",
         PropertyList({
             Property("mood", kPropertyTypeInteger, 70, 0, 100),
             Property("satiety", kPropertyTypeInteger, 70, 0, 100),
@@ -654,34 +486,7 @@ void McpServer::AddUserOnlyTools() {
         });
     
     AddTool("self.pet.configure_auto_announcement",
-        "🔔 Configure automatic pet status announcements.\n"
-        "\n"
-        "By default, auto-announcement is ENABLED with 3-minute intervals.\n"
-        "The device will automatically check pet status every minute and announce\n"
-        "warnings when:\n"
-        "- Satiety <= 30 (hungry)\n"
-        "- Cleanliness <= 30 (dirty)\n"
-        "- Mood <= 30 (unhappy)\n"
-        "\n"
-        "⚠️ IMPORTANT BEHAVIOR:\n"
-        "1. Only announces when device is IDLE (not during conversations)\n"
-        "2. Respects the configured interval (won't spam)\n"
-        "3. Uses adaptive logic (considers user frequency, time of day)\n"
-        "\n"
-        "📊 USAGE EXAMPLES:\n"
-        "- User: \"关闭自动提醒\" → configure_auto_announcement(enable=false)\n"
-        "- User: \"开启自动提醒\" → configure_auto_announcement(enable=true)\n"
-        "- User: \"每5分钟提醒一次\" → configure_auto_announcement(enable=true, interval_min=5)\n"
-        "- User: \"不要太频繁提醒\" → configure_auto_announcement(enable=true, interval_min=10)\n"
-        "\n"
-        "💡 RECOMMENDATION:\n"
-        "- High-frequency users (>15/week): 2-3 min intervals (more engaged)\n"
-        "- Medium-frequency users (5-15/week): 3-5 min intervals (balanced)\n"
-        "- Low-frequency users (<5/week): 5-10 min intervals (don't disturb)\n"
-        "\n"
-        "When you call this tool, explain to user in natural language what was changed:\n"
-        "✅ GOOD: '好的～已经帮你调整成每5分钟提醒一次啰！'\n"
-        "❌ BAD: 'Auto announcement configured: enable=true, interval=5'",
+        "Configure auto pet status announcements. enable: on/off, interval_min: minutes between announcements.",
         PropertyList({
             Property("enable", kPropertyTypeBoolean, true),
             Property("interval_min", kPropertyTypeInteger, 3, 1, 60)

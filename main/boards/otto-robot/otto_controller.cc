@@ -196,8 +196,8 @@ private:
         continue;
       }
       
-      // 随机选择动作：0=向左看, 1=向右看, 2=抖左腿, 3=抖右腿
-      int action = esp_random() % 4;
+      // 随机选择动作：0=向左看, 1=向右看, 2=抖左腿, 3=抖右腿, 4=向左转, 5=向右转
+      int action = esp_random() % 6;
       
       ESP_LOGI(TAG, "执行空闲动作: %d", action);
       
@@ -213,6 +213,12 @@ private:
           break;
         case 3:  // 抖右腿
           controller->QueueAction(ACTION_SHAKE_LEG, 1, 2000, -1, 0);
+          break;
+        case 4:  // 向左转
+          controller->QueueAction(ACTION_TURN, 2, 600, 1, 30);
+          break;
+        case 5:  // 向右转
+          controller->QueueAction(ACTION_TURN, 2, 600, -1, 30);
           break;
       }
       

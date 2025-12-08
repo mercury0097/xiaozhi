@@ -14,10 +14,19 @@
 #include "lamp_controller.h"
 #include "led/single_led.h"
 #include "mcp_server.h"
-#include "otto_emoji_display.h"
 #include "power_manager.h"
 #include "system_reset.h"
 #include "wifi_board.h"
+
+// 切换矢量眼睛或GIF表情模式
+// 定义 USE_VECTOR_EYES 使用矢量眼睛，注释掉则使用GIF表情
+#define USE_VECTOR_EYES
+
+#ifdef USE_VECTOR_EYES
+#include "otto_vector_eye_display.h"
+#else
+#include "otto_emoji_display.h"
+#endif
 
 #define TAG "OttoRobot"
 
@@ -73,9 +82,17 @@ private:
         esp_lcd_panel_swap_xy(panel, DISPLAY_SWAP_XY);
         esp_lcd_panel_mirror(panel, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y);
 
+#ifdef USE_VECTOR_EYES
+        display_ = new OttoVectorEyeDisplay(
+            panel_io, panel, DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y,
+            DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
+        ESP_LOGI(TAG, "使用矢量眼睛显示模式");
+#else
         display_ = new OttoEmojiDisplay(
             panel_io, panel, DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y,
             DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
+        ESP_LOGI(TAG, "使用GIF表情显示模式");
+#endif
     }
 
     void InitializeButtons() {

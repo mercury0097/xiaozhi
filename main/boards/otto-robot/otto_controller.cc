@@ -337,9 +337,9 @@ public:
     mcp_server.AddTool(
         "self.otto.jump",
         "跳跃。steps: 跳跃次数(1-100); speed: "
-        "跳跃速度(400-1500，数值越小越快，推荐700)",
+        "跳跃周期(2000-8000ms，数值越大越慢，推荐5000)",
         PropertyList({Property("steps", kPropertyTypeInteger, 1, 1, 100),
-                      Property("speed", kPropertyTypeInteger, 700, 400, 1500)}),
+                      Property("speed", kPropertyTypeInteger, 5000, 2000, 8000)}),
         [this](const PropertyList &properties) -> ReturnValue {
           int steps = properties["steps"].value<int>();
           int speed = properties["speed"].value<int>();
@@ -562,7 +562,7 @@ public:
           otto_.SetTrims(left_leg, right_leg, left_foot, right_foot, left_hand,
                          right_hand);
 
-          QueueAction(ACTION_JUMP, 1, 500, 0, 0);
+          QueueAction(ACTION_JUMP, 1, 5000, 0, 0);  // 慢动作跳跃测试
 
           return "舵机 " + servo_type + " 微调设置为 " +
                  std::to_string(trim_value) + " 度，已永久保存";

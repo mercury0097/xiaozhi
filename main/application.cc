@@ -1118,7 +1118,7 @@ void Application::OnTouchDetected() {
         OttoSwing(2, 1000, 30);
       } else {
         ESP_LOGI(TAG, "Touch: triggering Jump action");
-        OttoJump(2, 600);
+        OttoJump(1, 5000);  // 慢动作跳跃
       }
       SendTouchStartSequence();
     };

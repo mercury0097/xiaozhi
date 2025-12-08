@@ -79,7 +79,7 @@ public:
   void SetRestState(bool state);
 
   //-- Predetermined Motion Functions
-  void Jump(float steps = 1, int period = 3000); // 增加到 3000ms，更丝滑
+  void Jump(float steps = 1, int period = 5000); // 增加到 5000ms，慢动作跳跃
 
   void Walk(float steps = 4, int period = 1000, int dir = FORWARD,
             int amount = 0);

@@ -399,18 +399,33 @@ void Otto::SetRestState(bool state) { is_otto_resting_ = state; }
 //-- Otto movement: Jump
 //--  Parameters:
 //--    steps: Number of steps
-//--    T: Period
+//--    T: Period (默认 5000ms，慢动作跳跃)
+//--  优化：使用贝塞尔曲线，增加准备和落地缓冲阶段
 //---------------------------------------------------------
 void Otto::Jump(float steps, int period) {
-  // 上跳：快速有力（0.6 倍时间）
+  int homes[SERVO_COUNT] = {
+      90, 90, 90, 90, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+  
+  // 阶段1: 准备蓄力（下蹲）- 使用 EASE_IN_OUT 平滑下蹲，30%时间
+  int crouch[SERVO_COUNT] = {
+      90, 90, 120, 60, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+  MoveServosWithEase(period * 0.30, crouch, EASE_IN_OUT);
+  
+  // 阶段2: 上跳（有力但不急）- 使用 EASE_OUT，15%时间
   int up[SERVO_COUNT] = {
       90, 90, 150, 30, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
-  MoveServos(period * 0.6, up); // 上跳快一些
-
-  // 下落：缓慢柔和（1.2 倍时间，符合重力下落）
-  int down[SERVO_COUNT] = {
-      90, 90, 90, 90, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
-  MoveServos(period * 1.2, down); // 下落慢一些，更丝滑
+  MoveServosWithEase(period * 0.15, up, EASE_OUT);
+  
+  // 阶段3: 滞空（保持一会儿）- 10%时间
+  vTaskDelay(pdMS_TO_TICKS(period * 0.10));
+  
+  // 阶段4: 下落（自然下落）- 使用 EASE_IN 模拟重力，15%时间
+  int land[SERVO_COUNT] = {
+      90, 90, 110, 70, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+  MoveServosWithEase(period * 0.15, land, EASE_IN);
+  
+  // 阶段5: 落地缓冲（吸收冲击）- 使用 EASE_IN_OUT 平滑归位，30%时间
+  MoveServosWithEase(period * 0.30, homes, EASE_IN_OUT);
 }
 
 //---------------------------------------------------------

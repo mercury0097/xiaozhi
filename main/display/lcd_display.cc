@@ -454,11 +454,13 @@ void LcdDisplay::SetupUI() {
 
   // Pet emoji display - shows current pet icon (左侧显示)
   // 使用宠物图片显示
+  // 暂时禁用宠物图标显示（可恢复）
   pet_emoji_img_ = lv_img_create(status_bar_);
   lv_img_set_src(pet_emoji_img_, &cat);    // 默认显示猫咪图标
   lv_obj_set_size(pet_emoji_img_, 20, 20); // 缩小到20x20像素
   lv_obj_set_style_margin_left(pet_emoji_img_, lvgl_theme->spacing(1), 0);
   lv_obj_set_style_margin_right(pet_emoji_img_, lvgl_theme->spacing(1), 0);
+  lv_obj_add_flag(pet_emoji_img_, LV_OBJ_FLAG_HIDDEN);  // 隐藏宠物图标
 
   notification_label_ = lv_label_create(status_bar_);
   lv_obj_set_flex_grow(notification_label_, 1);
@@ -920,10 +922,12 @@ void LcdDisplay::SetupUI() {
   lv_obj_set_style_text_color(battery_label_, lvgl_theme->text_color(), 0);
 
   // Pet emoji display - shows current pet emoji
+  // 暂时禁用宠物图标显示（可恢复）
   pet_emoji_img_ = lv_img_create(status_bar_);
   lv_img_set_src(pet_emoji_img_, &cat);    // 默认显示猫咪图标
   lv_obj_set_size(pet_emoji_img_, 20, 20); // 缩小到20x20像素
   lv_obj_set_style_margin_left(pet_emoji_img_, lvgl_theme->spacing(1), 0);
+  lv_obj_add_flag(pet_emoji_img_, LV_OBJ_FLAG_HIDDEN);  // 隐藏宠物图标
 
   low_battery_popup_ = lv_obj_create(screen);
   lv_obj_set_scrollbar_mode(low_battery_popup_, LV_SCROLLBAR_MODE_OFF);
@@ -1062,6 +1066,11 @@ void LcdDisplay::SetEmotion(const char *emotion) {
 }
 
 void LcdDisplay::SetPetEmoji(const char *emoji) {
+  // 暂时禁用宠物图标功能（可恢复）
+  // 直接返回，不显示任何宠物图标
+  return;
+
+#if 0  // 原始代码保留，方便以后恢复
   if (pet_emoji_img_ == nullptr || emoji == nullptr) {
     ESP_LOGW(TAG, "SetPetEmoji called with null parameter");
     return;
@@ -1094,6 +1103,7 @@ void LcdDisplay::SetPetEmoji(const char *emoji) {
       ESP_LOGW(TAG, "  [%d] = 0x%02X", i, (unsigned char)emoji_str[i]);
     }
   }
+#endif
 }
 
 void LcdDisplay::SetTheme(Theme *theme) {

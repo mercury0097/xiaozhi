@@ -156,7 +156,7 @@ void AfeAudioProcessor::Initialize(AudioCodec* codec, int frame_duration_ms, srm
     
     // 🎯 大幅增加 AFE Ringbuffer 大小，避免 Speaking 状态下缓冲区溢出
     // VADNet1 神经网络处理更耗时，需要更大的缓冲区防止数据丢失
-    afe_config->afe_ringbuf_size = 1000;  // 从 500 增加到 1000（神经网络 VAD 需要更多缓冲）
+    afe_config->afe_ringbuf_size = 2000;  // 从 1000 增加到 2000（进一步增大缓冲）
     
     // 🎯 AFE 任务固定到 CPU1（负载较轻的核心）
     // CPU0: audio_input(8) + 图形渲染 → 负载重
@@ -217,6 +217,8 @@ void AfeAudioProcessor::Feed(std::vector<int16_t>&& data) {
     if ((xEventGroupGetBits(event_group_) & PROCESSOR_RUNNING) == 0) {
         return;
     }
+    // 喂数据前短暂延时，给 fetch 任务处理时间，避免 ringbuffer 溢出
+    vTaskDelay(pdMS_TO_TICKS(1));
     afe_iface_->feed(afe_data_, data.data());
 }
 

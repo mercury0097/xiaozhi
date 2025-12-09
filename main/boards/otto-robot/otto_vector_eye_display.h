@@ -37,6 +37,9 @@ public:
     // 重写聊天消息设置方法
     virtual void SetChatMessage(const char* role, const char* content) override;
 
+    // 重写主题设置方法 - 矢量眼睛使用固定风格
+    virtual void SetTheme(Theme* theme) override;
+
     /**
      * @brief 手动触发眨眼
      */
@@ -69,6 +72,21 @@ private:
     lv_timer_t* update_timer_ = nullptr;
 
     lv_obj_t* chat_message_label_ = nullptr;
+
+    // 随机表情变化
+    uint32_t last_emotion_change_ = 0;
+    uint32_t next_emotion_interval_ = 0;
+    vector_eyes::Emotion current_emotion_ = vector_eyes::Emotion::Normal;
+    bool idle_mode_ = true;  // 空闲模式下才随机变化
+    
+    // 表情演示模式
+    bool demo_mode_ = false;   // 禁用演示模式
+    int demo_emotion_index_ = 0;
+    uint32_t demo_start_time_ = 0;
+    
+    void CheckRandomEmotion();
+    void CheckDemoMode();
+    void ScheduleNextEmotionChange();
 
     // 表情名称映射表
     struct EmotionNameMap {

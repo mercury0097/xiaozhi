@@ -401,55 +401,58 @@ void Application::Start() {
     ESP_LOGE(TAG, "  ❌ 事件总线初始化失败");
   }
 
-  auto &user_profile = xiaozhi::UserProfile::GetInstance();
-  if (user_profile.Initialize()) {
-    ESP_LOGI(TAG, "  ✅ 用户画像加载成功 (7d互动: %u次)",
-             user_profile.GetInteractionCount7d());
-  } else {
-    ESP_LOGW(TAG, "  ⚠️  用户画像加载失败，使用默认值");
-  }
+  // ⚠️  已禁用学习系统以节省CPU和内存资源
+  // auto &user_profile = xiaozhi::UserProfile::GetInstance();
+  // if (user_profile.Initialize()) {
+  //   ESP_LOGI(TAG, "  ✅ 用户画像加载成功 (7d互动: %u次)",
+  //            user_profile.GetInteractionCount7d());
+  // } else {
+  //   ESP_LOGW(TAG, "  ⚠️  用户画像加载失败，使用默认值");
+  // }
 
-  auto &decision_engine = xiaozhi::DecisionEngine::GetInstance();
-  if (decision_engine.Initialize()) {
-    ESP_LOGI(TAG, "  ✅ 决策引擎初始化成功");
-  } else {
-    ESP_LOGE(TAG, "  ❌ 决策引擎初始化失败");
-  }
+  // auto &decision_engine = xiaozhi::DecisionEngine::GetInstance();
+  // if (decision_engine.Initialize()) {
+  //   ESP_LOGI(TAG, "  ✅ 决策引擎初始化成功");
+  // } else {
+  //   ESP_LOGE(TAG, "  ❌ 决策引擎初始化失败");
+  // }
 
-  // 🎯 初始化自适应行为系统
-  auto &adaptive = xiaozhi::AdaptiveBehavior::GetInstance();
-  if (adaptive.Initialize()) {
-    ESP_LOGI(TAG, "  ✅ 自适应行为系统初始化成功");
-    ESP_LOGI(TAG, "    📊 用户频率等级: %d (0=低频, 1=中频, 2=高频)",
-             adaptive.GetUserFrequencyLevel());
-    ESP_LOGI(TAG, "    🐾 宠物衰减速率: %.2fx", adaptive.GetPetDecayRate());
-  } else {
-    ESP_LOGW(TAG, "  ⚠️  自适应行为系统初始化失败，使用默认值");
-  }
+  // // 🎯 初始化自适应行为系统
+  // auto &adaptive = xiaozhi::AdaptiveBehavior::GetInstance();
+  // if (adaptive.Initialize()) {
+  //   ESP_LOGI(TAG, "  ✅ 自适应行为系统初始化成功");
+  //   ESP_LOGI(TAG, "    📊 用户频率等级: %d (0=低频, 1=中频, 2=高频)",
+  //            adaptive.GetUserFrequencyLevel());
+  //   ESP_LOGI(TAG, "    🐾 宠物衰减速率: %.2fx", adaptive.GetPetDecayRate());
+  // } else {
+  //   ESP_LOGW(TAG, "  ⚠️  自适应行为系统初始化失败，使用默认值");
+  // }
 
-  // 💝 初始化情绪记忆系统
-  auto &emotional_memory = xiaozhi::EmotionalMemory::GetInstance();
-  if (emotional_memory.Initialize()) {
-    ESP_LOGI(TAG, "  ✅ 情绪记忆系统初始化成功");
-    ESP_LOGI(TAG, "    💔 孤独感: %d/100",
-             emotional_memory.GetLonelinessLevel());
-    ESP_LOGI(TAG, "    ⚡ 兴奋度: %d/100",
-             emotional_memory.GetExcitementLevel());
-    ESP_LOGI(TAG, "    ❤️  信任度: %d/100", emotional_memory.GetTrustLevel());
-  } else {
-    ESP_LOGW(TAG, "  ⚠️  情绪记忆系统初始化失败，使用默认值");
-  }
+  // // 💝 初始化情绪记忆系统
+  // auto &emotional_memory = xiaozhi::EmotionalMemory::GetInstance();
+  // if (emotional_memory.Initialize()) {
+  //   ESP_LOGI(TAG, "  ✅ 情绪记忆系统初始化成功");
+  //   ESP_LOGI(TAG, "    💔 孤独感: %d/100",
+  //            emotional_memory.GetLonelinessLevel());
+  //   ESP_LOGI(TAG, "    ⚡ 兴奋度: %d/100",
+  //            emotional_memory.GetExcitementLevel());
+  //   ESP_LOGI(TAG, "    ❤️  信任度: %d/100", emotional_memory.GetTrustLevel());
+  // } else {
+  //   ESP_LOGW(TAG, "  ⚠️  情绪记忆系统初始化失败，使用默认值");
+  // }
+  
+  ESP_LOGI(TAG, "  ⚠️  学习系统已禁用以节省资源");
 
-  // 📡 注册事件监听器（展示事件总线功能）
-  event_bus.Subscribe(xiaozhi::LOGIC_EVENT, xiaozhi::LOGIC_CONVERSATION_END,
-                      [&user_profile](void *event_data) {
-                        ESP_LOGI(TAG, "🎧 Event received: CONVERSATION_END");
-                        ESP_LOGI(TAG,
-                                 "  📊 User stats: 7d互动=%u次, 最爱话题=%s",
-                                 user_profile.GetInteractionCount7d(),
-                                 user_profile.GetFavoriteTopic());
-                      });
-  ESP_LOGI(TAG, "  ✅ 注册事件监听器: CONVERSATION_END");
+  // 📡 注册事件监听器（已禁用，学习系统已关闭）
+  // event_bus.Subscribe(xiaozhi::LOGIC_EVENT, xiaozhi::LOGIC_CONVERSATION_END,
+  //                     [&user_profile](void *event_data) {
+  //                       ESP_LOGI(TAG, "🎧 Event received: CONVERSATION_END");
+  //                       ESP_LOGI(TAG,
+  //                                "  📊 User stats: 7d互动=%u次, 最爱话题=%s",
+  //                                user_profile.GetInteractionCount7d(),
+  //                                user_profile.GetFavoriteTopic());
+  //                     });
+  // ESP_LOGI(TAG, "  ✅ 注册事件监听器: CONVERSATION_END");
 
   ESP_LOGI(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
@@ -511,10 +514,11 @@ void Application::Start() {
   mcp_server.AddCommonTools();
   mcp_server.AddUserOnlyTools();
 
-  // 🐾 启动电子宠物系统（仅支持手动查询，无自动播报）
-  auto &pet_system = PetSystem::GetInstance();
-  ESP_LOGI(TAG, "  ℹ️  宠物系统：仅支持手动查询（说'宠物状态'）");
-  pet_system.Start();
+  // 🐾 已禁用电子宠物系统以节省CPU和内存资源
+  // auto &pet_system = PetSystem::GetInstance();
+  // ESP_LOGI(TAG, "  ℹ️  宠物系统：仅支持手动查询（说'宠物状态'）");
+  // pet_system.Start();
+  ESP_LOGI(TAG, "  ⚠️  宠物系统已禁用以节省资源");
 
   if (ota.HasMqttConfig()) {
     protocol_ = std::make_unique<MqttProtocol>();
@@ -598,10 +602,10 @@ void Application::Start() {
               ESP_LOGI(TAG, "音频播放完成，用时 %d ms", wait_count * 100);
             }
 
-            // 🧠 记录对话（用于用户画像）
-            auto &profile = xiaozhi::UserProfile::GetInstance();
-            profile.RecordInteraction("chat", 5000); // 假设5秒对话
-            profile.CheckAutoSave();
+            // 🧠 记录对话（已禁用，学习系统已关闭）
+            // auto &profile = xiaozhi::UserProfile::GetInstance();
+            // profile.RecordInteraction("chat", 5000); // 假设5秒对话
+            // profile.CheckAutoSave();
 
             // 📡 发布对话结束事件（事件总线）
             auto &event_bus = xiaozhi::EventBus::GetInstance();
@@ -634,8 +638,8 @@ void Application::Start() {
         ESP_LOGI(TAG, ">> %s", text->valuestring);
         Schedule([this, display, message = std::string(text->valuestring)]() {
           display->SetChatMessage("user", message.c_str());
-          // 🐾 记录聊天，用于电子宠物任务统计
-          PetSystem::GetInstance().RecordChat();
+          // 🐾 记录聊天（已禁用，宠物系统已关闭）
+          // PetSystem::GetInstance().RecordChat();
         });
       }
     } else if (strcmp(type->valuestring, "llm") == 0) {

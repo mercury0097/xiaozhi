@@ -35,7 +35,7 @@ void AudioService::Initialize(AudioCodec *codec) {
   opus_encoder_ =
       std::make_unique<OpusEncoderWrapper>(16000, 1, OPUS_FRAME_DURATION_MS);
   opus_encoder_->SetComplexity(
-      2); // 降低到2: 平衡音质与性能，防止CPU过载导致重启
+      1); // 设置为1: 平衡音质与性能（0=最快但音质差，10=最好但CPU高）
 
   if (codec->input_sample_rate() != 16000) {
     input_resampler_.Configure(codec->input_sample_rate(), 16000);
@@ -85,13 +85,14 @@ void AudioService::Start() {
 
 #if CONFIG_USE_AUDIO_PROCESSOR
   /* Start the audio input task (increased stack size for noise reduction) */
+  /* 优先级降到5，避免长时间占用CPU导致看门狗超时 */
   xTaskCreatePinnedToCore(
       [](void *arg) {
         AudioService *audio_service = (AudioService *)arg;
         audio_service->AudioInputTask();
         vTaskDelete(NULL);
       },
-      "audio_input", 2048 * 5, this, 8, &audio_input_task_handle_, 0);
+      "audio_input", 2048 * 5, this, 5, &audio_input_task_handle_, 0);
 
   /* Start the audio output task (固定到 CPU1，减轻 CPU0 负担) */
   xTaskCreatePinnedToCore(
@@ -278,6 +279,8 @@ void AudioService::AudioInputTask() {
       if (samples > 0) {
         if (ReadAudioData(data, 16000, samples)) {
           audio_processor_->Feed(std::move(data));
+          // 让出 CPU，避免 AFE 处理时间过长导致看门狗超时
+          taskYIELD();
           continue;
         }
       }

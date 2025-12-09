@@ -367,11 +367,8 @@ void Otto::Home(bool hands_down) {
       if (i == LEFT_HAND || i == RIGHT_HAND) {
         if (hands_down) {
           // 如果需要复位手部，设置为默认值
-          if (i == LEFT_HAND) {
-            homes[i] = HAND_HOME_POSITION;
-          } else {                               // RIGHT_HAND
-            homes[i] = 180 - HAND_HOME_POSITION; // 右手镜像位置
-          }
+          // 修正：右手安装方向相反，放下位置与左手相同
+          homes[i] = HAND_HOME_POSITION;
         } else {
           // 如果不需要复位手部，保持当前位置
           homes[i] = servo_[i].GetPosition();
@@ -404,16 +401,16 @@ void Otto::SetRestState(bool state) { is_otto_resting_ = state; }
 //---------------------------------------------------------
 void Otto::Jump(float steps, int period) {
   int homes[SERVO_COUNT] = {
-      90, 90, 90, 90, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      90, 90, 90, 90, HAND_HOME_POSITION, HAND_HOME_POSITION};
   
   // 阶段1: 准备蓄力（下蹲）- 使用 EASE_IN_OUT 平滑下蹲，30%时间
   int crouch[SERVO_COUNT] = {
-      90, 90, 120, 60, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      90, 90, 120, 60, HAND_HOME_POSITION, HAND_HOME_POSITION};
   MoveServosWithEase(period * 0.30, crouch, EASE_IN_OUT);
   
   // 阶段2: 上跳（有力但不急）- 使用 EASE_OUT，15%时间
   int up[SERVO_COUNT] = {
-      90, 90, 150, 30, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      90, 90, 150, 30, HAND_HOME_POSITION, HAND_HOME_POSITION};
   MoveServosWithEase(period * 0.15, up, EASE_OUT);
   
   // 阶段3: 滞空（保持一会儿）- 10%时间
@@ -421,7 +418,7 @@ void Otto::Jump(float steps, int period) {
   
   // 阶段4: 下落（自然下落）- 使用 EASE_IN 模拟重力，15%时间
   int land[SERVO_COUNT] = {
-      90, 90, 110, 70, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      90, 90, 110, 70, HAND_HOME_POSITION, HAND_HOME_POSITION};
   MoveServosWithEase(period * 0.15, land, EASE_IN);
   
   // 阶段5: 落地缓冲（吸收冲击）- 使用 EASE_IN_OUT 平滑归位，30%时间
@@ -450,7 +447,7 @@ void Otto::Walk(float steps, int period, int dir, int amount) {
                         4,
                         -4,
                         HAND_HOME_POSITION - 90,
-                        (180 - HAND_HOME_POSITION) - 90};
+                        (HAND_HOME_POSITION) - 90};
   
   // 相位差：髋关节同相(0)，脚关节与髋差90度
   double phase_diff[SERVO_COUNT] = {0, 0, DEG2RAD(dir * 90), DEG2RAD(dir * 90),
@@ -491,7 +488,7 @@ void Otto::Turn(float steps, int period, int dir, int amount) {
                         5,
                         -5,
                         HAND_HOME_POSITION - 90,
-                        (180 - HAND_HOME_POSITION) - 90}; // 右手偏移修正
+                        (HAND_HOME_POSITION) - 90}; // 右手偏移修正
   double phase_diff[SERVO_COUNT] = {0, 0, DEG2RAD(-90), DEG2RAD(-90), 0, 0};
 
   if (dir == LEFT) {
@@ -534,11 +531,11 @@ void Otto::Bend(int steps, int period, int dir) {
   // 参考抖脚动作：左脚<90向外，>90向内；右脚<90向内，>90向外
   // 向左弯腰：左脚向外支撑(<90)，右脚向外抬起(>90)
   int bend1[SERVO_COUNT] = {
-      90, 90, 62, 118, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      90, 90, 62, 118, HAND_HOME_POSITION, HAND_HOME_POSITION};
   int bend2[SERVO_COUNT] = {
-      90, 90, 62, 145, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      90, 90, 62, 145, HAND_HOME_POSITION, HAND_HOME_POSITION};
   int homes[SERVO_COUNT] = {
-      90, 90, 90, 90, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      90, 90, 90, 90, HAND_HOME_POSITION, HAND_HOME_POSITION};
 
   // Changes in the parameters if right direction is chosen
   // 向右弯腰：左脚向内抬起(>90)，右脚向内支撑(<90)
@@ -581,13 +578,13 @@ void Otto::ShakeLeg(int steps, int period, int dir) {
   // 默认: 右腿抖动 (dir=-1)
   // [2]=左脚(支撑), [3]=右脚(抬起抖动)
   int shake_leg1[SERVO_COUNT] = {
-      90, 90, 70, 50, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      90, 90, 70, 50, HAND_HOME_POSITION, HAND_HOME_POSITION};
   int shake_leg2[SERVO_COUNT] = {
-      90, 90, 70, 110, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      90, 90, 70, 110, HAND_HOME_POSITION, HAND_HOME_POSITION};
   int shake_leg3[SERVO_COUNT] = {
-      90, 90, 70, 80, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      90, 90, 70, 80, HAND_HOME_POSITION, HAND_HOME_POSITION};
   int homes[SERVO_COUNT] = {
-      90, 90, 90, 90, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      90, 90, 90, 90, HAND_HOME_POSITION, HAND_HOME_POSITION};
 
   // 左腿抖动 (dir=1): 左脚抬起抖动，右脚支撑
   // 左脚方向反转 (180-x)，右脚支撑保持原方向
@@ -632,7 +629,7 @@ void Otto::ShakeLeg(int steps, int period, int dir) {
 void Otto::LookAround(int period, int dir) {
   // [0]=左腿, [1]=右腿, [2]=左脚, [3]=右脚
   int homes[SERVO_COUNT] = {
-      90, 90, 90, 90, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      90, 90, 90, 90, HAND_HOME_POSITION, HAND_HOME_POSITION};
 
   // 腿部旋转角度（髋关节）
   int leg_turn = 25;  // 旋转25度（加大幅度）
@@ -650,7 +647,7 @@ void Otto::LookAround(int period, int dir) {
     look_pose[2] = 90 + foot_lift;     // 左脚微微抬起
     look_pose[3] = 90 - support_tilt;  // 右脚支撑（向内倾斜）
     look_pose[4] = HAND_HOME_POSITION;
-    look_pose[5] = 180 - HAND_HOME_POSITION;
+    look_pose[5] = HAND_HOME_POSITION;
   } else {
     // 向右看：两腿向右转，左脚支撑，右脚微抬
     look_pose[0] = 90 + leg_turn;      // 左腿向右转
@@ -658,7 +655,7 @@ void Otto::LookAround(int period, int dir) {
     look_pose[2] = 90 + support_tilt;  // 左脚支撑（向内倾斜）
     look_pose[3] = 90 - foot_lift;     // 右脚微微抬起
     look_pose[4] = HAND_HOME_POSITION;
-    look_pose[5] = 180 - HAND_HOME_POSITION;
+    look_pose[5] = HAND_HOME_POSITION;
   }
 
   // 转向看：使用平滑过渡（速度放慢）
@@ -686,7 +683,7 @@ void Otto::UpDown(float steps, int period, int height) {
   //--   in one extreme position (not in the middle)
   int A[SERVO_COUNT] = {0, 0, height, height, 0, 0};
   int O[SERVO_COUNT] = {
-      0, 0, height, -height, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      0, 0, height, -height, HAND_HOME_POSITION, HAND_HOME_POSITION};
   double phase_diff[SERVO_COUNT] = {0, 0, DEG2RAD(-90), DEG2RAD(90), 0, 0};
 
   //-- Let's oscillate the servos!
@@ -709,7 +706,7 @@ void Otto::Swing(float steps, int period, int height) {
                         height / 2,
                         -height / 2,
                         HAND_HOME_POSITION - 90,
-                        (180 - HAND_HOME_POSITION) - 90};
+                        (HAND_HOME_POSITION) - 90};
   double phase_diff[SERVO_COUNT] = {0, 0, DEG2RAD(0), DEG2RAD(0), 0, 0};
 
   //-- Let's oscillate the servos!
@@ -730,7 +727,7 @@ void Otto::TiptoeSwing(float steps, int period, int height) {
   //-- It causes the robot to swing from side to side
   int A[SERVO_COUNT] = {0, 0, height, height, 0, 0};
   int O[SERVO_COUNT] = {
-      0, 0, height, -height, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      0, 0, height, -height, HAND_HOME_POSITION, HAND_HOME_POSITION};
   double phase_diff[SERVO_COUNT] = {0, 0, 0, 0, 0, 0};
 
   //-- Let's oscillate the servos!
@@ -753,7 +750,7 @@ void Otto::Jitter(float steps, int period, int height) {
   height = (height < 25) ? height : 25;
   int A[SERVO_COUNT] = {height, height, 0, 0, 0, 0};
   int O[SERVO_COUNT] = {
-      0, 0, 0, 0, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      0, 0, 0, 0, HAND_HOME_POSITION, HAND_HOME_POSITION};
   double phase_diff[SERVO_COUNT] = {DEG2RAD(-90), DEG2RAD(90), 0, 0, 0, 0};
 
   //-- Let's oscillate the servos!
@@ -779,7 +776,7 @@ void Otto::AscendingTurn(float steps, int period, int height) {
                         height + 4,
                         -height + 4,
                         HAND_HOME_POSITION - 90,
-                        (180 - HAND_HOME_POSITION) - 90};
+                        (HAND_HOME_POSITION) - 90};
   double phase_diff[SERVO_COUNT] = {DEG2RAD(-90), DEG2RAD(90), DEG2RAD(-90),
                                     DEG2RAD(90),  0,           0};
 
@@ -815,7 +812,7 @@ void Otto::Moonwalker(float steps, int period, int height, int dir) {
                         height / 2 + 2,
                         -height / 2 - 2,
                         HAND_HOME_POSITION - 90,
-                        (180 - HAND_HOME_POSITION) - 90};
+                        (HAND_HOME_POSITION) - 90};
   int phi = -dir * 90;
   double phase_diff[SERVO_COUNT] = {
       0, 0, DEG2RAD(phi), DEG2RAD(-60 * dir + phi), 0, 0};
@@ -839,7 +836,7 @@ void Otto::Crusaito(float steps, int period, int height, int dir) {
                         height / 2 + 4,
                         -height / 2 - 4,
                         HAND_HOME_POSITION - 90,
-                        (180 - HAND_HOME_POSITION) - 90};
+                        (HAND_HOME_POSITION) - 90};
   double phase_diff[SERVO_COUNT] = {90, 90, DEG2RAD(0), DEG2RAD(-60 * dir),
                                     0,  0};
 
@@ -862,7 +859,7 @@ void Otto::Flapping(float steps, int period, int height, int dir) {
                         height - 10,
                         -height + 10,
                         HAND_HOME_POSITION - 90,
-                        (180 - HAND_HOME_POSITION) - 90};
+                        (HAND_HOME_POSITION) - 90};
   double phase_diff[SERVO_COUNT] = {
       DEG2RAD(0), DEG2RAD(180), DEG2RAD(-90 * dir), DEG2RAD(90 * dir), 0, 0};
 
@@ -875,6 +872,7 @@ void Otto::Flapping(float steps, int period, int height, int dir) {
 //--  Parameters:
 //--    period: 动作时间
 //--    dir: 方向 1=左手, -1=右手, 0=双手
+//--  注意：右手舵机安装方向相反，抬起=小角度，放下=大角度
 //---------------------------------------------------------
 void Otto::HandsUp(int period, int dir) {
   if (!has_hands_) {
@@ -882,18 +880,20 @@ void Otto::HandsUp(int period, int dir) {
   }
 
   int initial[SERVO_COUNT] = {
-      90, 90, 90, 90, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      90, 90, 90, 90, HAND_HOME_POSITION, HAND_HOME_POSITION};
   int target[SERVO_COUNT] = {
-      90, 90, 90, 90, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      90, 90, 90, 90, HAND_HOME_POSITION, HAND_HOME_POSITION};
 
+  // 左手抬起：45度（小角度=抬起）
+  // 右手抬起：45度（修正：右手安装方向相反，小角度=抬起）
   if (dir == 0) {
     target[LEFT_HAND] = 45;   // 左手抬起
-    target[RIGHT_HAND] = 135; // 右手抬起 (180-45)
+    target[RIGHT_HAND] = 45;  // 右手抬起（修正）
   } else if (dir == 1) {
     target[LEFT_HAND] = 45;
     target[RIGHT_HAND] = servo_[RIGHT_HAND].GetPosition();
   } else if (dir == -1) {
-    target[RIGHT_HAND] = 135;
+    target[RIGHT_HAND] = 45;  // 右手抬起（修正）
     target[LEFT_HAND] = servo_[LEFT_HAND].GetPosition();
   }
 
@@ -905,14 +905,17 @@ void Otto::HandsUp(int period, int dir) {
 //--  Parameters:
 //--    period: 动作时间
 //--    dir: 方向 1=左手, -1=右手, 0=双手
+//--  注意：右手舵机安装方向相反，抬起=小角度，放下=大角度
 //---------------------------------------------------------
 void Otto::HandsDown(int period, int dir) {
   if (!has_hands_) {
     return;
   }
 
+  // 左手放下：HAND_HOME_POSITION (170度，大角度=放下)
+  // 右手放下：HAND_HOME_POSITION (170度，修正：右手安装方向相反，大角度=放下)
   int target[SERVO_COUNT] = {
-      90, 90, 90, 90, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      90, 90, 90, 90, HAND_HOME_POSITION, HAND_HOME_POSITION};
 
   if (dir == 1) {
     target[RIGHT_HAND] = servo_[RIGHT_HAND].GetPosition();
@@ -982,7 +985,7 @@ void Otto::HandWave(int period, int dir) {
   if (servo_index == LEFT_HAND) {
     current_positions[servo_index] = HAND_HOME_POSITION;
   } else {
-    current_positions[servo_index] = 180 - HAND_HOME_POSITION;
+    current_positions[servo_index] = HAND_HOME_POSITION;
   }
   MoveServos(300, current_positions);
 }
@@ -1027,7 +1030,7 @@ void Otto::HandWaveBoth(int period) {
   }
 
   current_positions[LEFT_HAND] = HAND_HOME_POSITION;
-  current_positions[RIGHT_HAND] = 180 - HAND_HOME_POSITION;
+  current_positions[RIGHT_HAND] = HAND_HOME_POSITION;
   MoveServos(300, current_positions);
 }
 
@@ -1156,7 +1159,7 @@ void Otto::HandWaveSmooth(int period, int dir) {
 
   int servo_index = (dir == LEFT) ? LEFT_HAND : RIGHT_HAND;
   int home_pos = (servo_index == LEFT_HAND) ? HAND_HOME_POSITION
-                                            : (180 - HAND_HOME_POSITION);
+                                            : (HAND_HOME_POSITION);
   int up_pos = (servo_index == LEFT_HAND) ? 45 : 135;
   int wave_amplitude = 25;
 
@@ -1189,17 +1192,17 @@ void Otto::HandWaveSmooth(int period, int dir) {
 void Otto::JumpBounce(int period) {
   // 准备姿势（下蹲）
   int crouch[SERVO_COUNT] = {
-      90, 90, 120, 60, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      90, 90, 120, 60, HAND_HOME_POSITION, HAND_HOME_POSITION};
   MoveServosWithEase(period / 4, crouch, EASE_IN);
 
   // 跳起
   int up[SERVO_COUNT] = {
-      90, 90, 150, 30, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      90, 90, 150, 30, HAND_HOME_POSITION, HAND_HOME_POSITION};
   MoveServosWithEase(period / 4, up, EASE_OUT);
 
   // 落地（带弹跳）
   int down[SERVO_COUNT] = {
-      90, 90, 90, 90, HAND_HOME_POSITION, 180 - HAND_HOME_POSITION};
+      90, 90, 90, 90, HAND_HOME_POSITION, HAND_HOME_POSITION};
   MoveServosWithEase(period / 2, down, EASE_OUT_BOUNCE);
 }
 

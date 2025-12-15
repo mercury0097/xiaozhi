@@ -164,17 +164,32 @@ bool Ota::CheckVersion() {
     cJSON *websocket = cJSON_GetObjectItem(root, "websocket");
     if (cJSON_IsObject(websocket)) {
         Settings settings("websocket", true);
-        cJSON *item = NULL;
-        cJSON_ArrayForEach(item, websocket) {
-            if (cJSON_IsString(item)) {
-                if (settings.GetString(item->string) != item->valuestring) {
-                    settings.SetString(item->string, item->valuestring);
-                }
-            } else if (cJSON_IsNumber(item)) {
-                if (settings.GetInt(item->string) != item->valueint) {
-                    settings.SetInt(item->string, item->valueint);
+        // 检查用户是否已设置自定义URL（非官方服务器），如果已设置则不覆盖
+        std::string existing_url = settings.GetString("url");
+        bool is_official_url = existing_url.empty() ||
+                               existing_url.find("xiaozhi.me") != std::string::npos ||
+                               existing_url.find("tenclass.net") != std::string::npos;
+        bool has_custom_url = !existing_url.empty() && !is_official_url;
+        
+        ESP_LOGI(TAG, "OTA websocket check: existing='%s', is_official=%d, has_custom=%d",
+                 existing_url.c_str(), is_official_url, has_custom_url);
+        
+        if (!has_custom_url) {
+            // 只有没有自定义URL时才使用OTA返回的配置
+            cJSON *item = NULL;
+            cJSON_ArrayForEach(item, websocket) {
+                if (cJSON_IsString(item)) {
+                    if (settings.GetString(item->string) != item->valuestring) {
+                        settings.SetString(item->string, item->valuestring);
+                    }
+                } else if (cJSON_IsNumber(item)) {
+                    if (settings.GetInt(item->string) != item->valueint) {
+                        settings.SetInt(item->string, item->valueint);
+                    }
                 }
             }
+        } else {
+            ESP_LOGI(TAG, "🔧 Custom websocket URL detected (%s), skipping OTA config override", existing_url.c_str());
         }
         has_websocket_config_ = true;
     } else {

@@ -520,7 +520,25 @@ void Application::Start() {
   // pet_system.Start();
   ESP_LOGI(TAG, "  ⚠️  宠物系统已禁用以节省资源");
 
-  if (ota.HasMqttConfig()) {
+  // 检查是否有自定义WebSocket URL（用户在WiFi配置页面设置的）
+  Settings ws_settings("websocket", false);
+  std::string custom_ws_url = ws_settings.GetString("url");
+  
+  // 检查URL是否是用户自定义的（非官方服务器）
+  // 官方服务器通常是 wss://api.xiaozhi.me 或类似域名
+  bool is_official_url = custom_ws_url.empty() ||
+                         custom_ws_url.find("xiaozhi.me") != std::string::npos ||
+                         custom_ws_url.find("tenclass.net") != std::string::npos;
+  bool has_custom_ws = !custom_ws_url.empty() && !is_official_url;
+  
+  ESP_LOGI(TAG, "WebSocket URL check: url='%s', is_official=%d, has_custom=%d", 
+           custom_ws_url.c_str(), is_official_url, has_custom_ws);
+  
+  if (has_custom_ws) {
+    // 用户设置了自定义WebSocket URL，强制使用WebSocket协议
+    ESP_LOGI(TAG, "🔧 Using CUSTOM WebSocket URL: %s", custom_ws_url.c_str());
+    protocol_ = std::make_unique<WebsocketProtocol>();
+  } else if (ota.HasMqttConfig()) {
     protocol_ = std::make_unique<MqttProtocol>();
   } else if (ota.HasWebsocketConfig()) {
     protocol_ = std::make_unique<WebsocketProtocol>();
@@ -921,14 +939,9 @@ void Application::SetDeviceState(DeviceState state) {
   case kDeviceStateSpeaking:
     display->SetStatus(Lang::Strings::SPEAKING);
 
-    //  ⚠️  Barge-in 暂时禁用：ESP-SR AFE 不支持 AEC + VAD 同时运行
-    // Speaking 状态下关闭音频处理，避免 CPU 过载和 Ringbuffer 溢出
-    // 用户仍可在 Listening 状态时打断（说话时机器人会停止说话并监听）
-    if (listening_mode_ != kListeningModeRealtime) {
-      audio_service_.EnableVoiceProcessing(false);
-      // Only AFE wake word can be detected in speaking mode
-      audio_service_.EnableWakeWordDetection(audio_service_.IsAfeWakeWord());
-    }
+    // 🎯 Speaking 状态下关闭语音处理，但保留唤醒词检测用于打断
+    audio_service_.EnableVoiceProcessing(false);
+    audio_service_.EnableWakeWordDetection(audio_service_.IsAfeWakeWord());
     audio_service_.ResetDecoder();
     break;
   default:

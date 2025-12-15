@@ -80,10 +80,10 @@ bool AfeWakeWord::Initialize(AudioCodec* codec, srmodel_list_t* models_list) {
     afe_config->aec_init = codec_->input_reference();
     // 🛡️ 使用 SR_LOW_COST 模式的 AEC，VOIP 模式太耗 CPU 会触发看门狗
     afe_config->aec_mode = AEC_MODE_SR_LOW_COST;
-    afe_config->afe_perferred_core = 1;
-    afe_config->afe_perferred_priority = 3;  // 提高优先级，避免 ringbuffer 溢出
+    afe_config->afe_perferred_core = 0;  // 🎯 固定到 CPU0，与 audio_input 同核
+    afe_config->afe_perferred_priority = 5;  // 🎯 提高优先级到 5
     afe_config->memory_alloc_mode = AFE_MEMORY_ALLOC_MORE_PSRAM;
-    afe_config->afe_ringbuf_size = 50;  // 增加 ringbuffer 大小
+    afe_config->afe_ringbuf_size = 300;  // 🎯 增加 ringbuffer 到 300
     
     // 唤醒词检测阶段不启用降噪，避免 CPU 过载
     // 降噪会在语音识别阶段启用（说话时才启动）
@@ -98,11 +98,12 @@ bool AfeWakeWord::Initialize(AudioCodec* codec, srmodel_list_t* models_list) {
     afe_iface_->set_wakenet_threshold(afe_data_, 1, 0.48f);
     ESP_LOGI(TAG, "唤醒词检测阈值已设置为 0.48（默认约0.5）");
 
-    xTaskCreate([](void* arg) {
+    // 🎯 提高 audio_detection 任务优先级到 5，固定到 CPU0
+    xTaskCreatePinnedToCore([](void* arg) {
         auto this_ = (AfeWakeWord*)arg;
         this_->AudioDetectionTask();
         vTaskDelete(NULL);
-    }, "audio_detection", 4096, this, 3, nullptr);
+    }, "audio_detection", 4096, this, 5, nullptr, 0);
 
     return true;
 }
@@ -130,7 +131,10 @@ void AfeWakeWord::Feed(const std::vector<int16_t>& data) {
     if ((xEventGroupGetBits(event_group_) & DETECTION_RUNNING_EVENT) == 0) {
         return;
     }
+    // 🎯 喂数据前让出 CPU，给 fetch 任务处理时间
+    taskYIELD();
     afe_iface_->feed(afe_data_, data.data());
+    taskYIELD();
 }
 
 size_t AfeWakeWord::GetFeedSize() {

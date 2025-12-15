@@ -55,6 +55,31 @@ public:
      */
     void SetEyeColor(uint32_t color_hex);
 
+    /**
+     * @brief 设置目标帧率
+     * @param fps 目标帧率，范围 10-30 FPS
+     * @return true 设置成功，false 参数超出范围
+     * 
+     * 验证帧率范围并更新 LVGL timer 周期
+     * Requirements: 4.1
+     */
+    bool SetTargetFrameRate(uint8_t fps);
+
+    /**
+     * @brief 获取当前目标帧率
+     * @return 当前设置的目标帧率
+     */
+    uint8_t GetTargetFrameRate() const { return target_fps_; }
+
+    /**
+     * @brief 获取实际帧率
+     * @return 最近计算的实际帧率 (FPS)
+     * 
+     * 返回最近一秒内测量的实际帧率
+     * Requirements: 4.1
+     */
+    float GetActualFrameRate() const { return actual_fps_; }
+
 private:
     void SetupCanvas();
     void StartUpdateTimer();
@@ -83,6 +108,17 @@ private:
     bool demo_mode_ = false;   // 禁用演示模式
     int demo_emotion_index_ = 0;
     uint32_t demo_start_time_ = 0;
+    
+    // 性能统计变量 (Requirements 3.3, 4.4)
+    uint32_t frame_count_ = 0;           // 帧计数器
+    uint32_t last_fps_update_ = 0;       // 上次FPS更新时间戳
+    float actual_fps_ = 0.0f;            // 实际测量的帧率
+    uint32_t last_render_time_ = 0;      // 上一帧渲染时间(ms)
+    
+    // 帧率配置 (Requirements 4.1)
+    uint8_t target_fps_ = 20;            // 目标帧率，默认20 FPS
+    static constexpr uint8_t kMinFps = 10;   // 最小帧率
+    static constexpr uint8_t kMaxFps = 30;   // 最大帧率
     
     void CheckRandomEmotion();
     void CheckDemoMode();

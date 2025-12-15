@@ -84,8 +84,10 @@ void AudioService::Start() {
   esp_timer_start_periodic(audio_power_timer_, 1000000);
 
 #if CONFIG_USE_AUDIO_PROCESSOR
-  /* Start the audio input task (increased stack size for noise reduction) */
-  /* 优先级降到5，避免长时间占用CPU导致看门狗超时 */
+  /* 🎯 音频任务优化 - 提高播放任务优先级，减少卡顿
+   * CPU0: audio_input (优先级5) - 采集麦克风数据
+   * CPU1: audio_output (优先级7) + opus_codec (优先级6) - 播放和解码
+   */
   xTaskCreatePinnedToCore(
       [](void *arg) {
         AudioService *audio_service = (AudioService *)arg;
@@ -94,14 +96,14 @@ void AudioService::Start() {
       },
       "audio_input", 2048 * 5, this, 5, &audio_input_task_handle_, 0);
 
-  /* Start the audio output task (固定到 CPU1，减轻 CPU0 负担) */
+  /* Start the audio output task - 提高优先级到7，确保播放流畅 */
   xTaskCreatePinnedToCore(
       [](void *arg) {
         AudioService *audio_service = (AudioService *)arg;
         audio_service->AudioOutputTask();
         vTaskDelete(NULL);
       },
-      "audio_output", 2048 * 2, this, 4, &audio_output_task_handle_, 1);
+      "audio_output", 2048 * 2, this, 7, &audio_output_task_handle_, 1);
 #else
   /* Start the audio input task */
   xTaskCreate(
@@ -122,16 +124,17 @@ void AudioService::Start() {
       "audio_output", 2048, this, 4, &audio_output_task_handle_);
 #endif
 
-  /* Start the opus codec task */
-  xTaskCreate(
+  /* Start the opus codec task - 保持CPU1，优先级7，与播放任务同级 */
+  xTaskCreatePinnedToCore(
       [](void *arg) {
         AudioService *audio_service = (AudioService *)arg;
         audio_service->OpusCodecTask();
         vTaskDelete(NULL);
       },
       "opus_codec", 2048 * 16, this,
-      5,                         // 增加栈大小到32KB,防止音频增益处理导致栈溢出
-      &opus_codec_task_handle_); // 优先级提高到5,确保及时解码
+      7, // 优先级7，与audio_output同级，轮流执行避免饿死
+      &opus_codec_task_handle_,
+      1); // 保持在CPU1，避免与CPU0的AEC FFT冲突导致看门狗超时
 }
 
 void AudioService::Stop() {
@@ -230,7 +233,7 @@ void AudioService::AudioInputTask() {
     }
     if (audio_input_need_warmup_) {
       audio_input_need_warmup_ = false;
-      vTaskDelay(pdMS_TO_TICKS(120));
+      vTaskDelay(pdMS_TO_TICKS(50)); // 减少预热延迟 120ms → 50ms
       continue;
     }
 
@@ -294,19 +297,52 @@ void AudioService::AudioInputTask() {
 }
 
 void AudioService::AudioOutputTask() {
+  static uint32_t empty_queue_count = 0;
+  
   while (true) {
     std::unique_lock<std::mutex> lock(audio_queue_mutex_);
-    audio_queue_cv_.wait(lock, [this]() {
-      return !audio_playback_queue_.empty() || service_stopped_;
-    });
-    if (service_stopped_) {
-      break;
+    
+    // 🎯 等待播放队列有数据，但不要无限等待
+    if (audio_playback_queue_.empty()) {
+      bool has_data = audio_queue_cv_.wait_for(lock, std::chrono::milliseconds(100), [this]() {
+        return !audio_playback_queue_.empty() || service_stopped_;
+      });
+      
+      if (service_stopped_) {
+        break;
+      }
+      
+      if (!has_data || audio_playback_queue_.empty()) {
+        empty_queue_count++;
+        if (empty_queue_count % 10 == 1) { // 每秒打印一次（100ms * 10）
+          ESP_LOGW(TAG, "⚠️ 播放队列为空，等待解码... (已等待 %u 次)", empty_queue_count);
+        }
+        continue;
+      }
+    }
+    
+    // 队列有数据，重置计数器
+    if (empty_queue_count > 0) {
+      size_t queue_size = audio_playback_queue_.size();
+      ESP_LOGI(TAG, "✅ 播放队列恢复，队列大小: %d", (int)queue_size);
+      empty_queue_count = 0;
     }
 
     auto task = std::move(audio_playback_queue_.front());
     audio_playback_queue_.pop_front();
+    size_t remaining_queue_size = audio_playback_queue_.size();
     audio_queue_cv_.notify_all();
     lock.unlock();
+    
+    // 🎯 队列告急时输出警告（< 5 包）
+    if (remaining_queue_size < 5) {
+      static uint32_t last_warning_time = 0;
+      uint32_t now = esp_timer_get_time() / 1000;
+      if (now - last_warning_time > 1000) { // 每秒最多警告一次
+        ESP_LOGW(TAG, "⚠️ 播放队列告急: %d 包（可能出现卡顿）", (int)remaining_queue_size);
+        last_warning_time = now;
+      }
+    }
 
     if (!codec_->output_enabled()) {
       esp_timer_stop(audio_power_timer_);
@@ -346,11 +382,17 @@ void AudioService::OpusCodecTask() {
       break;
     }
 
+    /* 🎯 批量解码：连续处理多个包后再让出CPU，提高吞吐量 */
+    int decoded_count = 0;
+    const int MAX_BATCH_SIZE = 5; // 最多连续解码5个包
+
     /* Decode the audio from decode queue */
-    if (!audio_decode_queue_.empty() &&
-        audio_playback_queue_.size() < MAX_PLAYBACK_TASKS_IN_QUEUE) {
+    while (!audio_decode_queue_.empty() &&
+           audio_playback_queue_.size() < MAX_PLAYBACK_TASKS_IN_QUEUE &&
+           decoded_count < MAX_BATCH_SIZE) {
       auto packet = std::move(audio_decode_queue_.front());
       audio_decode_queue_.pop_front();
+      size_t decode_queue_remaining = audio_decode_queue_.size();
       audio_queue_cv_.notify_all();
       lock.unlock();
 
@@ -377,34 +419,43 @@ void AudioService::OpusCodecTask() {
           task->pcm = std::move(resampled);
         }
 
-        // 🔊 音频增益处理:提升音量(1.5倍增益,可调整)
-        constexpr float kAudioGain =
-            1.5f; // 增益系数:1.0=原始,1.5=提升50%,2.0=翻倍
-        for (auto &sample : task->pcm) {
-          int32_t amplified = static_cast<int32_t>(sample * kAudioGain);
-          // 削波保护:防止溢出导致失真
-          if (amplified > 32767) {
-            sample = 32767;
-          } else if (amplified < -32768) {
-            sample = -32768;
-          } else {
-            sample = static_cast<int16_t>(amplified);
-          }
-        }
-
         lock.lock();
         audio_playback_queue_.push_back(std::move(task));
+        size_t playback_queue_size = audio_playback_queue_.size();
         audio_queue_cv_.notify_all();
+        lock.unlock();
+        
+        decoded_count++;
+        debug_statistics_.decode_count++;
+        
+        // 🎯 调试日志：监控解码吞吐量
+        static uint32_t last_log_time = 0;
+        uint32_t now = esp_timer_get_time() / 1000;
+        if (now - last_log_time > 5000) { // 每5秒打印一次
+          ESP_LOGI(TAG, "📊 解码状态: 解码队列=%d, 播放队列=%d, 本批次解码=%d",
+                   (int)decode_queue_remaining, (int)playback_queue_size, decoded_count);
+          last_log_time = now;
+        }
       } else {
         ESP_LOGE(TAG, "Failed to decode audio");
-        lock.lock();
+        decoded_count++;
       }
-      debug_statistics_.decode_count++;
+      
+      lock.lock();
+    }
+    
+    // 🎯 批量解码完成后让出CPU
+    if (decoded_count > 0) {
+      lock.unlock();
+      taskYIELD();
+      lock.lock();
     }
 
-    /* Encode the audio to send queue */
-    if (!audio_encode_queue_.empty() &&
-        audio_send_queue_.size() < MAX_SEND_PACKETS_IN_QUEUE) {
+    /* Encode the audio to send queue - 批量编码 */
+    int encoded_count = 0;
+    while (!audio_encode_queue_.empty() &&
+           audio_send_queue_.size() < MAX_SEND_PACKETS_IN_QUEUE &&
+           encoded_count < MAX_BATCH_SIZE) {
       auto task = std::move(audio_encode_queue_.front());
       audio_encode_queue_.pop_front();
       audio_queue_cv_.notify_all();
@@ -416,6 +467,8 @@ void AudioService::OpusCodecTask() {
       packet->timestamp = task->timestamp;
       if (!opus_encoder_->Encode(std::move(task->pcm), packet->payload)) {
         ESP_LOGE(TAG, "Failed to encode audio");
+        lock.lock();
+        encoded_count++;
         continue;
       }
 
@@ -432,6 +485,15 @@ void AudioService::OpusCodecTask() {
         audio_testing_queue_.push_back(std::move(packet));
       }
       debug_statistics_.encode_count++;
+      encoded_count++;
+      
+      lock.lock();
+    }
+    
+    // 🎯 批量编码完成后让出CPU
+    if (encoded_count > 0) {
+      lock.unlock();
+      taskYIELD();
       lock.lock();
     }
   }
@@ -451,10 +513,15 @@ void AudioService::SetDecodeSampleRate(int sample_rate, int frame_duration) {
 
   auto codec = Board::GetInstance().GetAudioCodec();
   if (opus_decoder_->sample_rate() != codec->output_sample_rate()) {
-    ESP_LOGI(TAG, "Resampling audio from %d to %d",
-             opus_decoder_->sample_rate(), codec->output_sample_rate());
-    output_resampler_.Configure(opus_decoder_->sample_rate(),
-                                codec->output_sample_rate());
+    // 尝试动态调整硬件采样率以匹配音频流
+    codec->SetOutputSampleRate(opus_decoder_->sample_rate());
+
+    if (opus_decoder_->sample_rate() != codec->output_sample_rate()) {
+      ESP_LOGI(TAG, "Resampling audio from %d to %d",
+               opus_decoder_->sample_rate(), codec->output_sample_rate());
+      output_resampler_.Configure(opus_decoder_->sample_rate(),
+                                  codec->output_sample_rate());
+    }
   }
 }
 

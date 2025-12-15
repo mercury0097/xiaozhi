@@ -155,8 +155,10 @@ void PalqiqiVectorEyeDisplay::SetupCanvas() {
 }
 
 void PalqiqiVectorEyeDisplay::StartUpdateTimer() {
-  // 创建 20Hz 更新定时器 (50ms)，平衡流畅度和性能
-  update_timer_ = lv_timer_create(UpdateTimerCallback, 50, this);
+  // 根据目标帧率创建更新定时器，默认 20Hz (50ms)
+  uint32_t period_ms = 1000 / target_fps_;
+  update_timer_ = lv_timer_create(UpdateTimerCallback, period_ms, this);
+  ESP_LOGI(TAG, "🎯 启动更新定时器: %d FPS (周期: %lu ms)", target_fps_, (unsigned long)period_ms);
 }
 
 void PalqiqiVectorEyeDisplay::StopUpdateTimer() {
@@ -178,24 +180,58 @@ void PalqiqiVectorEyeDisplay::OnUpdate() {
   if (!face_ || !canvas_)
     return;
 
-  DisplayLockGuard lock(static_cast<Display *>(this));
+  // 🎯 说话时保持正常帧率，不再跳帧
+  // 通过 taskYIELD() 让出 CPU 时间给音频任务
 
-  // 检查演示模式
-  CheckDemoMode();
+  // 📊 记录渲染开始时间
+  uint32_t render_start = lv_tick_get();
 
-  // 检查是否需要随机表情变化（演示模式结束后）
-  if (!demo_mode_) {
+  // 🎯 优化：先在锁外更新动画状态（不涉及 LVGL 操作）
+  // 检查演示模式和随机表情（这些只修改内部状态，不需要锁）
+  if (demo_mode_) {
+    CheckDemoMode();
+  } else {
     CheckRandomEmotion();
   }
 
-  // 更新动画状态
+  // 更新动画状态（计算眨眼、视线等，不涉及 LVGL）
   face_->Update();
 
-  // 重绘眼睛
-  face_->Draw();
+  // 🎯 只在绘制时持有锁，最小化锁持有时间
+  {
+    DisplayLockGuard lock(static_cast<Display *>(this));
+    
+    // 重绘眼睛
+    face_->Draw();
 
-  // 通知 LVGL canvas 已更新
-  lv_obj_invalidate(canvas_);
+    // 通知 LVGL canvas 已更新
+    lv_obj_invalidate(canvas_);
+  }
+  // 锁在这里释放，让音频任务有机会获取锁
+
+  // 📊 计算渲染耗时
+  uint32_t render_end = lv_tick_get();
+  last_render_time_ = render_end - render_start;
+  
+  // 📊 帧率统计：每秒计算一次实际帧率
+  frame_count_++;
+  if (render_end - last_fps_update_ >= 1000) {
+    actual_fps_ = (float)frame_count_ * 1000.0f / (float)(render_end - last_fps_update_);
+    // 只在调试时输出，减少日志开销
+    // ESP_LOGI(TAG, "📊 FPS=%.1f, 渲染=%lums", actual_fps_, (unsigned long)last_render_time_);
+    frame_count_ = 0;
+    last_fps_update_ = render_end;
+  }
+  
+  // ⚠️ 渲染时间超过30ms时输出警告（减少日志频率）
+  static uint32_t last_warning_time = 0;
+  if (last_render_time_ > 30 && (render_end - last_warning_time > 5000)) {
+    ESP_LOGW(TAG, "⚠️ 渲染时间过长: %lums", (unsigned long)last_render_time_);
+    last_warning_time = render_end;
+  }
+  
+  // 🎯 渲染完成后让出 CPU，给音频任务处理时间
+  taskYIELD();
 }
 
 void PalqiqiVectorEyeDisplay::CheckRandomEmotion() {
@@ -396,4 +432,28 @@ void PalqiqiVectorEyeDisplay::SetTheme(Theme *theme) {
   Display::SetTheme(theme);
 
   ESP_LOGI(TAG, "矢量眼睛模式：跳过主题UI更新");
+}
+
+bool PalqiqiVectorEyeDisplay::SetTargetFrameRate(uint8_t fps) {
+  // 验证帧率范围 10-30 FPS (Requirements 4.1)
+  if (fps < kMinFps || fps > kMaxFps) {
+    ESP_LOGW(TAG, "⚠️ 帧率设置超出范围: %d FPS (有效范围: %d-%d)", 
+             fps, kMinFps, kMaxFps);
+    return false;
+  }
+  
+  target_fps_ = fps;
+  
+  // 计算新的 timer 周期 (ms) = 1000 / fps
+  uint32_t period_ms = 1000 / fps;
+  
+  // 更新 LVGL timer 周期
+  if (update_timer_) {
+    lv_timer_set_period(update_timer_, period_ms);
+    ESP_LOGI(TAG, "🎯 帧率设置: %d FPS (周期: %lu ms)", fps, (unsigned long)period_ms);
+  } else {
+    ESP_LOGW(TAG, "⚠️ 更新定时器未初始化，帧率设置将在下次启动时生效");
+  }
+  
+  return true;
 }

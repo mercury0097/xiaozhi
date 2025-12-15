@@ -19,6 +19,28 @@ lv_obj_t *EyeDrawer::canvas_ = nullptr;
 lv_color_t EyeDrawer::draw_color_ = lv_color_white();
 lv_color_t EyeDrawer::bg_color_ = lv_color_black();
 
+// 🎯 性能优化：共享 layer，减少 init/finish 调用次数
+static lv_layer_t* g_shared_layer = nullptr;
+static lv_obj_t* g_layer_canvas = nullptr;
+
+// 开始批量绘制（在绘制多个图形前调用一次）
+static void BeginBatchDraw(lv_obj_t *canvas) {
+  if (!canvas) return;
+  if (g_shared_layer == nullptr) {
+    g_shared_layer = new lv_layer_t();
+  }
+  g_layer_canvas = canvas;
+  lv_canvas_init_layer(canvas, g_shared_layer);
+}
+
+// 结束批量绘制（在绘制完成后调用一次）
+static void EndBatchDraw() {
+  if (g_shared_layer && g_layer_canvas) {
+    lv_canvas_finish_layer(g_layer_canvas, g_shared_layer);
+  }
+  g_layer_canvas = nullptr;
+}
+
 void EyeDrawer::SetCanvas(lv_obj_t *canvas) { canvas_ = canvas; }
 
 void EyeDrawer::SetColor(lv_color_t color) { draw_color_ = color; }
@@ -27,17 +49,21 @@ void EyeDrawer::Clear(lv_color_t bg_color) {
   bg_color_ = bg_color;
   if (canvas_) {
     lv_canvas_fill_bg(canvas_, bg_color, LV_OPA_COVER);
+    // 🎯 开始批量绘制
+    BeginBatchDraw(canvas_);
   }
 }
 
-// 高性能：使用 LVGL layer 绘制填充矩形
+void EyeDrawer::FinishDraw() {
+  // 🎯 结束批量绘制
+  EndBatchDraw();
+}
+
+// 高性能：使用共享 layer 绘制填充矩形
 static void DrawRect(lv_obj_t *canvas, int32_t x, int32_t y, int32_t w,
                      int32_t h, lv_color_t color, int16_t radius = 0) {
-  if (!canvas || w <= 0 || h <= 0)
+  if (!canvas || w <= 0 || h <= 0 || !g_shared_layer)
     return;
-
-  lv_layer_t layer;
-  lv_canvas_init_layer(canvas, &layer);
 
   lv_draw_rect_dsc_t dsc;
   lv_draw_rect_dsc_init(&dsc);
@@ -47,19 +73,14 @@ static void DrawRect(lv_obj_t *canvas, int32_t x, int32_t y, int32_t w,
   dsc.border_width = 0;
 
   lv_area_t area = {x, y, x + w - 1, y + h - 1};
-  lv_draw_rect(&layer, &dsc, &area);
-
-  lv_canvas_finish_layer(canvas, &layer);
+  lv_draw_rect(g_shared_layer, &dsc, &area);
 }
 
-// 绘制带发光效果的矩形（Cozmo风格）
+// 绘制带发光效果的矩形（Cozmo风格）- 使用共享 layer
 static void DrawGlowRect(lv_obj_t *canvas, int32_t x, int32_t y, int32_t w,
                          int32_t h, lv_color_t color, int16_t radius = 0) {
-  if (!canvas || w <= 0 || h <= 0)
+  if (!canvas || w <= 0 || h <= 0 || !g_shared_layer)
     return;
-
-  lv_layer_t layer;
-  lv_canvas_init_layer(canvas, &layer);
 
   // 外发光层（半透明）
   lv_draw_rect_dsc_t glow_dsc;
@@ -71,7 +92,7 @@ static void DrawGlowRect(lv_obj_t *canvas, int32_t x, int32_t y, int32_t w,
 
   // 稍大的发光区域
   lv_area_t glow_area = {x - 3, y - 3, x + w + 2, y + h + 2};
-  lv_draw_rect(&layer, &glow_dsc, &glow_area);
+  lv_draw_rect(g_shared_layer, &glow_dsc, &glow_area);
 
   // 主眼睛形状
   lv_draw_rect_dsc_t dsc;
@@ -82,19 +103,14 @@ static void DrawGlowRect(lv_obj_t *canvas, int32_t x, int32_t y, int32_t w,
   dsc.border_width = 0;
 
   lv_area_t area = {x, y, x + w - 1, y + h - 1};
-  lv_draw_rect(&layer, &dsc, &area);
-
-  lv_canvas_finish_layer(canvas, &layer);
+  lv_draw_rect(g_shared_layer, &dsc, &area);
 }
 
-// 绘制三角形（用于斜边效果）
+// 绘制三角形（用于斜边效果）- 使用共享 layer
 static void DrawTriangle(lv_obj_t *canvas, int32_t x1, int32_t y1, int32_t x2,
                          int32_t y2, int32_t x3, int32_t y3, lv_color_t color) {
-  if (!canvas)
+  if (!canvas || !g_shared_layer)
     return;
-
-  lv_layer_t layer;
-  lv_canvas_init_layer(canvas, &layer);
 
   lv_draw_triangle_dsc_t dsc;
   lv_draw_triangle_dsc_init(&dsc);
@@ -107,19 +123,14 @@ static void DrawTriangle(lv_obj_t *canvas, int32_t x1, int32_t y1, int32_t x2,
   dsc.p[2].x = x3;
   dsc.p[2].y = y3;
 
-  lv_draw_triangle(&layer, &dsc);
-
-  lv_canvas_finish_layer(canvas, &layer);
+  lv_draw_triangle(g_shared_layer, &dsc);
 }
 
-// 绘制笑眼（上凸下平，填充面积大）
+// 绘制笑眼（上凸下平，填充面积大）- 使用共享 layer
 static void DrawHappyArc(lv_obj_t *canvas, int32_t x, int32_t y, int32_t w,
                          int32_t h, int32_t arc_height, lv_color_t color) {
-  if (!canvas || w <= 0 || h <= 0)
+  if (!canvas || w <= 0 || h <= 0 || !g_shared_layer)
     return;
-
-  lv_layer_t layer;
-  lv_canvas_init_layer(canvas, &layer);
 
   // 方案：画一个圆角矩形，然后上边用大弧度圆角
   // 下边用很小的圆角（几乎是平的）
@@ -137,7 +148,7 @@ static void DrawHappyArc(lv_obj_t *canvas, int32_t x, int32_t y, int32_t w,
   glow_dsc.border_width = 0;
 
   lv_area_t glow_area = {x - 3, y - 3, x + w + 2, y + total_height + 2};
-  lv_draw_rect(&layer, &glow_dsc, &glow_area);
+  lv_draw_rect(g_shared_layer, &glow_dsc, &glow_area);
 
   // 主体：上边大圆角，下边小圆角
   // 先画一个上边大圆角的矩形
@@ -149,7 +160,7 @@ static void DrawHappyArc(lv_obj_t *canvas, int32_t x, int32_t y, int32_t w,
   dsc.border_width = 0;
 
   lv_area_t area = {x, y, x + w - 1, y + total_height - 1};
-  lv_draw_rect(&layer, &dsc, &area);
+  lv_draw_rect(g_shared_layer, &dsc, &area);
 
   // 用背景色矩形把下半部分的圆角盖住，让下边变平
   lv_draw_rect_dsc_t cover_dsc;
@@ -161,9 +172,7 @@ static void DrawHappyArc(lv_obj_t *canvas, int32_t x, int32_t y, int32_t w,
 
   // 下半部分用小圆角矩形覆盖
   lv_area_t bottom_area = {x, y + total_height / 2, x + w - 1, y + total_height - 1};
-  lv_draw_rect(&layer, &cover_dsc, &bottom_area);
-
-  lv_canvas_finish_layer(canvas, &layer);
+  lv_draw_rect(g_shared_layer, &cover_dsc, &bottom_area);
 }
 
 // 绘制梯形（更精确的斜边效果）

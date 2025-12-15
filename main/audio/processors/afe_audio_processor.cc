@@ -117,9 +117,9 @@ void AfeAudioProcessor::Initialize(AudioCodec* codec, int frame_duration_ms, srm
     // 🛡️ 使用 SR_LOW_COST 模式的 AEC，VOIP 模式太耗 CPU 会触发看门狗
     afe_config->aec_mode = AEC_MODE_SR_LOW_COST;
     
-    // 🎯 优化 VAD 参数以更好地检测人声
+    // 🎯 优化 VAD 参数以更好地检测人声，减少识别延迟
     afe_config->vad_mode = VAD_MODE_3;  // 最灵敏模式（0=不灵敏, 3=灵敏）
-    afe_config->vad_min_noise_ms = 50;   // 缩短噪声判断时间（从100ms降到50ms）
+    afe_config->vad_min_noise_ms = 10;   // 进一步缩短噪声判断时间（从30ms降到10ms）
     if (vad_model_name != nullptr) {
         afe_config->vad_model_name = vad_model_name;
         ESP_LOGI(TAG, "✅ VAD 人声检测: 神经网络模式 (%s, Level 3 高灵敏)", vad_model_name);
@@ -154,18 +154,15 @@ void AfeAudioProcessor::Initialize(AudioCodec* codec, int frame_duration_ms, srm
     
     afe_config->memory_alloc_mode = AFE_MEMORY_ALLOC_MORE_PSRAM;
     
-    // 🎯 大幅增加 AFE Ringbuffer 大小，避免 Speaking 状态下缓冲区溢出
-    // VADNet1 神经网络处理更耗时，需要更大的缓冲区防止数据丢失
-    afe_config->afe_ringbuf_size = 2000;  // 从 1000 增加到 2000（进一步增大缓冲）
+    // 🎯 减小 AFE Ringbuffer，降低延迟（之前太大导致延迟高）
+    // 把 AFE 任务移到 CPU0 后，不再需要这么大的缓冲
+    afe_config->afe_ringbuf_size = 1000;  // 减小到 1000（约 62ms 缓冲）
     
-    // 🎯 AFE 任务固定到 CPU1（负载较轻的核心）
-    // CPU0: audio_input(8) + 图形渲染 → 负载重
-    // CPU1: audio_communication + audio_output + LVGL → 相对均衡
-    afe_config->afe_perferred_core = 1;  // 固定到 CPU1
-    
-    // 🎯 提高 AFE 任务优先级，确保及时处理音频数据
-    // 优先级 4（中等偏高）：高于播放任务(3)，但不会阻塞系统
-    afe_config->afe_perferred_priority = 4;  // 从 2 提升到 4
+    // 🎯 AFE 内部任务配置 - 移到 CPU0 避免与音频播放竞争
+    // CPU0: audio_input + AFE 处理（输入链路）
+    // CPU1: audio_output + opus_codec（输出链路）
+    afe_config->afe_perferred_core = 0;   // 移到 CPU0，与 audio_input 同核
+    afe_config->afe_perferred_priority = 6; // 优先级 6，高于 audio_input(5)
 
     // 🎯 启用 AEC（回声消除）+ VAD（语音检测）
     // 同时启用 AEC 和 VAD，AEC 消除播放音频的回声，VAD 检测人声
@@ -185,14 +182,14 @@ void AfeAudioProcessor::Initialize(AudioCodec* codec, int frame_duration_ms, srm
     afe_iface_ = esp_afe_handle_from_config(afe_config);
     afe_data_ = afe_iface_->create_from_config(afe_config);
     
-    // 🎯 audio_communication 任务固定到 CPU1（避免 CPU0 过载）
-    // 增加栈大小到 8KB，支持 Speaking 状态下 AEC + VAD + 唤醒词同时运行
-    // 优先级 4：与 audio_output 任务相同，确保音频处理链路顺畅
+    // 🎯 audio_communication 任务 - 移到 CPU0，与 AFE 内部任务同核
+    // CPU0 任务链：audio_input(5) → AFE内部(6) → audio_communication(6)
+    // 这样输入链路在同一个核心，避免跨核通信延迟
     xTaskCreatePinnedToCore([](void* arg) {
         auto this_ = (AfeAudioProcessor*)arg;
         this_->AudioProcessorTask();
         vTaskDelete(NULL);
-    }, "audio_communication", 4096 * 2, this, 4, NULL, 1);
+    }, "audio_communication", 4096 * 2, this, 6, NULL, 0);  // 改为 CPU0
 }
 
 AfeAudioProcessor::~AfeAudioProcessor() {
@@ -217,9 +214,11 @@ void AfeAudioProcessor::Feed(std::vector<int16_t>&& data) {
     if ((xEventGroupGetBits(event_group_) & PROCESSOR_RUNNING) == 0) {
         return;
     }
-    // 喂数据前短暂延时，给 fetch 任务处理时间，避免 ringbuffer 溢出
-    vTaskDelay(pdMS_TO_TICKS(1));
+    // 🎯 喂数据前让出 CPU，给 fetch 任务和渲染任务处理时间
+    taskYIELD();
     afe_iface_->feed(afe_data_, data.data());
+    // 🎯 喂完数据后再让出一次，确保 fetch 有机会处理
+    taskYIELD();
 }
 
 void AfeAudioProcessor::Start() {

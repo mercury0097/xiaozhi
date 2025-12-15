@@ -74,7 +74,7 @@ void VectorFace::Draw() {
   if (!canvas_)
     return;
 
-  // 清空画布
+  // 清空画布（同时开始批量绘制）
   EyeDrawer::Clear(bg_color_);
   EyeDrawer::SetColor(eye_color_);
 
@@ -85,6 +85,9 @@ void VectorFace::Draw() {
   // 绘制右眼
   EyeDrawer::Draw(right_eye_.GetCenterX(), right_eye_.GetCenterY(),
                   right_eye_.GetCurrentConfig());
+
+  // 🎯 完成批量绘制，提交所有绘图操作
+  EyeDrawer::FinishDraw();
 }
 
 void VectorFace::SetRandomBehavior(bool blink, bool look) {

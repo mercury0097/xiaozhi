@@ -88,6 +88,9 @@ bool WebsocketProtocol::OpenAudioChannel() {
         version_ = version;
     }
 
+    // 调试日志：显示实际使用的URL
+    ESP_LOGI(TAG, "WebSocket URL from NVS: %s", url.empty() ? "(empty)" : url.c_str());
+
     error_occurred_ = false;
 
     auto network = Board::GetInstance().GetNetwork();

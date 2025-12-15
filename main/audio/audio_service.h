@@ -38,11 +38,15 @@
  *
  */
 
+// 🎯 音频缓冲区配置 - 平衡低延迟与流畅度
 #define OPUS_FRAME_DURATION_MS 60
 #define MAX_ENCODE_TASKS_IN_QUEUE 2
-#define MAX_PLAYBACK_TASKS_IN_QUEUE 12 // 增加到12,提供720ms缓冲,减少播放卡顿
-#define MAX_DECODE_PACKETS_IN_QUEUE (2400 / OPUS_FRAME_DURATION_MS)
-#define MAX_SEND_PACKETS_IN_QUEUE (2400 / OPUS_FRAME_DURATION_MS)
+#define MAX_PLAYBACK_TASKS_IN_QUEUE                                            \
+  25 // 25个包 = 1500ms 缓冲（补偿CPU1上的任务竞争）
+#define MAX_DECODE_PACKETS_IN_QUEUE                                            \
+  (2400 / OPUS_FRAME_DURATION_MS) // 40个包 = 2.4秒
+#define MAX_SEND_PACKETS_IN_QUEUE                                              \
+  (1200 / OPUS_FRAME_DURATION_MS) // 20个包 = 1.2秒
 #define AUDIO_TESTING_MAX_DURATION_MS 10000
 #define MAX_TIMESTAMPS_IN_QUEUE 3
 

@@ -33,9 +33,14 @@ public:
   static void SetColor(lv_color_t color);
 
   /**
-   * @brief 清空画布
+   * @brief 清空画布（同时开始批量绘制）
    */
   static void Clear(lv_color_t bg_color);
+
+  /**
+   * @brief 完成绘制（结束批量绘制，提交所有绘图操作）
+   */
+  static void FinishDraw();
 
   /**
    * @brief 获取背景颜色

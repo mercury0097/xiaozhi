@@ -11,8 +11,9 @@
 
 #include "board.h"
 
-#define AUDIO_CODEC_DMA_DESC_NUM 6
-#define AUDIO_CODEC_DMA_FRAME_NUM 240
+// 🎯 增加 DMA 缓冲区大小，提供约240ms硬件缓冲（24kHz下）
+#define AUDIO_CODEC_DMA_DESC_NUM 12   // 增加描述符数量 8 → 12
+#define AUDIO_CODEC_DMA_FRAME_NUM 480 // 增加每帧大小 320 → 480
 
 class AudioCodec {
 public:
@@ -23,6 +24,7 @@ public:
   virtual void SetInputGain(float gain);
   virtual void EnableInput(bool enable);
   virtual void EnableOutput(bool enable);
+  virtual void SetOutputSampleRate(int sample_rate);
 
   virtual void OutputData(std::vector<int16_t> &data);
   virtual bool InputData(std::vector<int16_t> &data);
